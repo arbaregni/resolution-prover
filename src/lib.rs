@@ -6,6 +6,8 @@ mod ast;
 mod tests {
     use indexmap::set::IndexSet;
     use crate::prover::{Clause, ClauseInterner, is_satisfiable};
+    use crate::ast;
+    use crate::ast::{Expr, ExprKind};
 
     #[test]
     fn clause_builder_0() {

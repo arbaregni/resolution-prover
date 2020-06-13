@@ -1,0 +1,35 @@
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+
+reserved = @{
+   (  "if" | "then" | "implies" | "iff"
+    | "or" | "and" | "xor"
+    | "not"
+   ) ~ !(ASCII_ALPHA | "_" | "-")
+}
+
+literal = @{ !reserved ~ (ASCII_ALPHA | "_" ) ~ (ASCII_ALPHA | "_" | "-")* }
+
+not = _{ "not" | "!" | "~" }
+negation = { not ~ term }
+
+or = { "or" | "||" | "|" }
+
+and = { "and" | "&&" | "&" }
+
+implies = { "implies" | "=>" | "->" | "==>" | "-->" }
+
+parenthetical = { "(" ~ expr ~ ")" }
+
+term = _{
+     parenthetical | negation | literal
+}
+
+operator = {
+    or | and | implies
+}
+
+expr = _{
+    term ~ (operator ~ term)*
+}
+
+source = _{ SOI ~ expr ~ EOI }
