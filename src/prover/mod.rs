@@ -1,5 +1,9 @@
+#[macro_use]
+mod clause;
+
+pub use clause::*;
+
 use indexmap::set::IndexSet;
-use crate::clause::{ClauseId, ClauseInterner};
 
 pub fn is_satisfiable(clauses: IndexSet<ClauseId>, interner: &mut ClauseInterner) -> bool {
     let mut seen_before = IndexSet::new();

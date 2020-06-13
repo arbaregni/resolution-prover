@@ -1,12 +1,11 @@
 #[macro_use]
-pub mod clause;
 mod prover;
+mod ast;
 
 #[cfg(test)]
 mod tests {
-    use crate::clause::{Clause, ClauseInterner};
-    use crate::prover::is_satisfiable;
     use indexmap::set::IndexSet;
+    use crate::prover::{Clause, ClauseInterner, is_satisfiable};
 
     #[test]
     fn clause_builder_0() {

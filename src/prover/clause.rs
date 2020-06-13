@@ -3,20 +3,19 @@ use std::collections::BTreeMap;
 use indexmap::set::IndexSet;
 use std::fmt::Formatter;
 use std::fmt;
-use itertools::{Itertools, Position};
 
 /// A recursive macro that constructs a clause from terms
 #[macro_export]
 macro_rules! clause {
     // the base case: the empty clause
     () => {
-        crate::clause::Clause::empty()
+        crate::prover::Clause::empty()
     };
     ($term:ident) => {
-        $crate::clause::Clause::empty().set( stringify!($term) , true)
+        $crate::prover::Clause::empty().set( stringify!($term) , true)
     };
     ( ~ $term:ident) => {
-        crate::clause::Clause::empty().set( stringify!($term) , false)
+        crate::prover::Clause::empty().set( stringify!($term) , false)
     };
     // the recursive, truthy case
     ( $term:ident, $($tail:tt)*) => {

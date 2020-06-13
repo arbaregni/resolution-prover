@@ -1,7 +1,7 @@
 
 #[macro_use]
-mod clause;
 mod prover;
+mod ast;
 
 use crate::clause::Clause;
 use crate::clause::ClauseInterner;
