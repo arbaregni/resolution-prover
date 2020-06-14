@@ -14,7 +14,6 @@ pub fn parse(source: &str) -> Result<Expr<'_>, Error<Rule>> {
     // all we have to do is deal with operator precedence
     // and converting into Expr structs
     let pairs = Grammar::parse(Rule::source, source).map_err(|e| explain_reserved(source, e))?;
-    println!("here!");
     parse_expr(pairs)
 }
 
