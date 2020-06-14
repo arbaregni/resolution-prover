@@ -47,6 +47,14 @@ mod tests {
         ).into()
         )
     }
+    #[test]
+    fn parse_simple_4() {
+        let source = "not pleasant";
+        let expr = parse(source).expect("should not error");
+        assert_eq!(expr, ExprKind::Not(
+            ExprKind::Literal("pleasant").into()
+        ).into())
+    }
 
     #[test]
     fn parse_failure_0() {
@@ -143,6 +151,108 @@ mod tests {
                 ]).into(),
             ).into(),
         ]).into())
+    }
+
+    #[test]
+    fn negate_normalize_0() {
+        let expr = ExprKind::Not(
+            ExprKind::Not(
+                ExprKind::Not(
+                    ExprKind::Not(
+                        ExprKind::Literal("apple").into()
+                    ).into()
+                ).into()
+            ).into()
+        ).into();
+        let normalized = ExprKind::Literal("apple").into();
+        assert_eq!(expr.normalize_negations(), normalized)
+    }
+
+    #[test]
+    fn negate_normalize_1() {
+        let expr = ExprKind::Not(
+            ExprKind::And(vec![
+                ExprKind::Literal("apple").into(),
+                ExprKind::Literal("banana").into(),
+            ]).into()
+        ).into();
+        let normalized = ExprKind::Or(vec![
+            ExprKind::Not(
+                ExprKind::Literal("apple").into()
+            ).into(),
+            ExprKind::Not(
+                ExprKind::Literal("banana").into()
+            ).into(),
+        ]).into();
+        assert_eq!(expr.normalize_negations(), normalized);
+    }
+    #[test]
+    fn negate_normalize_2() {
+        let expr = ExprKind::Not(
+            ExprKind::And(vec![
+                ExprKind::Literal("apple").into(),
+                ExprKind::Literal("banana").into(),
+            ]).into()
+        ).into();
+        let normalized = ExprKind::Or(vec![
+            ExprKind::Not(
+                ExprKind::Literal("apple").into()
+            ).into(),
+            ExprKind::Not(
+                ExprKind::Literal("banana").into()
+            ).into(),
+        ]).into();
+        assert_eq!(expr.normalize_negations(), normalized);
+    }
+    #[test]
+    fn negate_normalize_3() {
+        let expr = ExprKind::Not(
+            ExprKind::Or(vec![
+                ExprKind::Literal("apple").into(),
+                ExprKind::Literal("banana").into(),
+            ]).into()
+        ).into();
+        let normalized = ExprKind::And(vec![
+            ExprKind::Not(
+                ExprKind::Literal("apple").into(),
+            ).into(),
+            ExprKind::Not(
+                ExprKind::Literal("banana").into(),
+            ).into(),
+        ]).into();
+        assert_eq!(expr.normalize_negations(), normalized)
+    }
+    #[test]
+    fn negate_normalize_4() {
+        let expr = ExprKind::Not(
+            ExprKind::Or(vec![
+                ExprKind::Literal("apple").into(),
+                ExprKind::Literal("banana").into(),
+                ExprKind::Not(
+                    ExprKind::And(vec![
+                        ExprKind::Literal("coconut").into(),
+                        ExprKind::Not(
+                            ExprKind::Literal("dragonfruit").into(),
+                        ).into()
+                    ]).into()
+                ).into(),
+            ]).into()
+        ).into();
+        let normalized = ExprKind::And(vec![
+            ExprKind::Not(
+                ExprKind::Literal("apple").into(),
+            ).into(),
+            ExprKind::Not(
+                ExprKind::Literal("banana").into(),
+            ).into(),
+            ExprKind::And(vec![
+                ExprKind::Literal("coconut").into(),
+                ExprKind::Not(
+                    ExprKind::Literal("dragonfruit").into()
+                ).into()
+            ]).into(),
+        ]).into();
+        assert_eq!(expr.normalize_negations(), normalized)
     }
 
 

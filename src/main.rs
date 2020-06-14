@@ -4,7 +4,7 @@ mod prover;
 mod ast;
 
 fn main() {
-    let source = "andy";
+    let source = "not not not andy";
     let expr = match ast::parse(source) {
         Ok(expr) => expr,
         Err(why) => {
@@ -13,5 +13,9 @@ fn main() {
         }
     };
     println!("{:?}", expr);
+
+    let expr = expr.normalize_negations();
+
+    println!("normalized: {:#?}", expr);
 
 }
