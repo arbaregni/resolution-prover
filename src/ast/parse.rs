@@ -103,7 +103,6 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, Error<Rule>> {
 
 /// updates the error so that reserved words are mentioned in the error message
 fn explain_reserved(source: &str, mut error: Error<Rule>) -> Error<Rule> {
-    println!("in explain_reserved");
     let start_idx = match error.location {
         InputLocation::Pos(idx) => idx,
         InputLocation::Span((idx, _)) => idx,
@@ -116,7 +115,6 @@ fn explain_reserved(source: &str, mut error: Error<Rule>) -> Error<Rule> {
         }
         Ok(pair) => pair
     };
-    println!("pair: {:?}", pair);
     error.variant = ErrorVariant::CustomError {
         message: format!("unexpected reserved word `{}`; expected literal, negation, or parenthetical",
                            pair.as_str().trim()
