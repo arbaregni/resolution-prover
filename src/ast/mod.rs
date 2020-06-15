@@ -1,6 +1,7 @@
 mod expr;
 pub use expr::*;
 
+#[allow(dead_code)]
 mod parse;
 pub use parse::*;
 

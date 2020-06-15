@@ -7,6 +7,7 @@ use indexmap::set::IndexSet;
 use crate::ast::Expr;
 
 /// search for a proof of `query` from `givens`
+#[allow(dead_code)]
 pub fn find_proof(givens: Vec<Expr<'_>>, goal: Expr<'_>) -> bool {
     let mut interner = ClauseInterner::new();
     let mut clause_set = IndexSet::new();
@@ -24,6 +25,7 @@ pub fn find_proof(givens: Vec<Expr<'_>>, goal: Expr<'_>) -> bool {
     has_contradiction(clause_set, &mut interner)
 }
 
+#[allow(dead_code)]
 pub fn has_contradiction(clause_set: IndexSet<ClauseId>, interner: &mut ClauseInterner) -> bool {
     let mut seen_before = IndexSet::new();
     let mut to_search = clause_set;

@@ -1,10 +1,8 @@
-use map_in_place::MapVecInPlace;
 
 #[macro_use]
 mod prover;
 mod ast;
 
-use crate::ast::ExprKind;
 use std::env;
 
 /// Parse and the givens and the goal,

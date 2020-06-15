@@ -42,6 +42,7 @@ impl Clause {
         Clause { terms: BTreeMap::new() }
     }
     /// Set a variable name to a specific truth-value, returning `self`
+    #[allow(dead_code)]
     pub fn set(mut self, var_name: String, truth_value: bool) -> Clause {
         self.insert(var_name, truth_value);
         self
@@ -67,6 +68,7 @@ impl Clause {
     ///     ------------------
     ///      `{q, ~q, r, s, ....}` which is true regardless of `q`'s truth value
     ///      `{p, ~p, r, s, ....}`
+    #[allow(dead_code)]
     pub fn resolve(&self, other: &Clause) -> Option<Clause> {
         let mut canceled_terms = false; // set to true if we have canceled terms
         let mut resolvant_terms = BTreeMap::new();
@@ -95,11 +97,8 @@ impl Clause {
         }
         Some(Clause { terms: resolvant_terms })
     }
-    /// Intern this object in the interner, returning our clause id
-    pub fn intern(self, interner: &mut ClauseInterner) -> ClauseId {
-        interner.intern_clause(self)
-    }
     /// Returns true if this is the empty clause, i.e falso
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.terms.is_empty()
     }
@@ -139,6 +138,7 @@ pub struct ClauseInterner {
 }
 
 impl ClauseInterner {
+    #[allow(dead_code)]
     pub fn new() -> ClauseInterner {
         ClauseInterner { clauses: IndexSet::new() }
     }
@@ -146,6 +146,7 @@ impl ClauseInterner {
         let (idx, _) = self.clauses.insert_full(clause);
         ClauseId(idx)
     }
+    #[allow(dead_code)]
     pub fn get(&self, id: ClauseId) -> &Clause {
         self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
     }
