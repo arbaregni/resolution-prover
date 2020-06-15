@@ -5,10 +5,10 @@ pub use expr::*;
 mod parse;
 pub use parse::*;
 
+
 #[cfg(test)]
 mod tests {
-    use crate::ast;
-    use crate::ast::{Expr, ExprKind, parse};
+    use crate::ast::{ExprKind, parse};
     use crate::prover::ClauseInterner;
     use indexmap::set::IndexSet;
 
@@ -366,6 +366,4 @@ mod tests {
 
         assert_eq!(clause_set_actual, clause_set_expected);
     }
-
-
 }
