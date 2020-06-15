@@ -1,25 +1,39 @@
+use map_in_place::MapVecInPlace;
 
 #[macro_use]
 mod prover;
 mod ast;
 
-fn main() {
-    let source = "(me and you) or (us and them)";
-    let expr = match ast::parse(source) {
-        Ok(expr) => expr,
-        Err(why) => {
-            eprintln!("{}", why);
-            return;
-        }
-    };
-    println!("{:?}", expr);
+use crate::ast::ExprKind;
+use std::env;
 
-    let expr = expr.normalize_negations();
+/// Parse and the givens and the goal,
+/// search for a proof, returning `Some(true)` on success, `Some(false)` otherwise
+/// returns `None` upon error
+fn service_proof_request(givens: &[&str], goal: &str) -> Result<bool, ()> {
+    let givens = givens
+        .iter()
+        .map(|&source| ast::parse(source))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            eprintln!("{}", e);
+        })?;
+    let goal = ast::parse(goal)
+        .map_err(|e| {
+            eprintln!("{}", e);
+        })?;
+    Ok( prover::find_proof(givens, goal) )
+}
 
-    println!("normalized: {:#?}", expr);
-
-    let expr = expr.distribute_ors_inward();
-
-    println!("in cnf: {:#?}", expr);
-
+fn main() -> Result<(), ()> {
+    let givens = vec![
+    ];
+    let goal = env::args().nth(1).expect("expected argument");
+    let success = service_proof_request(givens.as_slice(), goal.as_str())?;
+    if success {
+        println!("found proof!");
+    } else {
+        println!("could not find proof.");
+    }
+    Ok( () )
 }

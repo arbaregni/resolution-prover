@@ -8,6 +8,8 @@ pub use parse::*;
 mod tests {
     use crate::ast;
     use crate::ast::{Expr, ExprKind, parse};
+    use crate::prover::ClauseInterner;
+    use indexmap::set::IndexSet;
 
     #[test]
     fn parse_simple_0() {
@@ -155,16 +157,19 @@ mod tests {
 
     #[test]
     fn negate_normalize_0() {
-        let expr = ExprKind::Not(
+        let expr =
             ExprKind::Not(
                 ExprKind::Not(
                     ExprKind::Not(
-                        ExprKind::Literal("apple").into()
+                        ExprKind::Not(
+                            ExprKind::Not(
+                                ExprKind::Literal("apple").into()
+                            ).into()
+                        ).into()
                     ).into()
-                ).into()
             ).into()
         ).into();
-        let normalized = ExprKind::Literal("apple").into();
+        let normalized = ExprKind::Not(ExprKind::Literal("apple").into()).into();
         assert_eq!(expr.normalize_negations(), normalized)
     }
 
@@ -253,6 +258,112 @@ mod tests {
             ]).into(),
         ]).into();
         assert_eq!(expr.normalize_negations(), normalized)
+    }
+    #[test]
+    fn negate_normalize_5() {
+        let expr = ExprKind::Or(vec![
+            ExprKind::Or(vec![
+                ExprKind::Or(vec![
+                    ExprKind::Or(vec![
+                        ExprKind::Literal("a").into(),
+                        ExprKind::Literal("b").into(),
+                    ]).into(),
+                ]).into(),
+                ExprKind::Literal("c").into(),
+            ]).into(),
+            ExprKind::Literal("d").into(),
+            ExprKind::Literal("e").into(),
+            ExprKind::Or(vec![
+                ExprKind::Literal("f").into(),
+            ]).into(),
+            ExprKind::Literal("g").into(),
+            ExprKind::Or(vec![
+                ExprKind::Literal("h").into(),
+            ]).into(),
+            ExprKind::Literal("i").into(),
+        ]).into();
+        let normalized = ExprKind::Or(vec![
+            ExprKind::Literal("a").into(),
+            ExprKind::Literal("b").into(),
+            ExprKind::Literal("c").into(),
+            ExprKind::Literal("d").into(),
+            ExprKind::Literal("e").into(),
+            ExprKind::Literal("f").into(),
+            ExprKind::Literal("g").into(),
+            ExprKind::Literal("h").into(),
+            ExprKind::Literal("i").into(),
+        ]).into();
+        assert_eq!(expr.normalize_negations(), normalized);
+    }
+    #[test]
+    fn negate_normalize_6() {
+        let expr = ExprKind::And(vec![
+            ExprKind::And(vec![
+                ExprKind::And(vec![
+                    ExprKind::And(vec![
+                        ExprKind::Literal("p").into(),
+                    ]).into(),
+                    ExprKind::Literal("q").into(),
+                ]).into(),
+                ExprKind::And(vec![
+                    ExprKind::Literal("r").into(),
+                    ExprKind::Literal("s").into(),
+                    ExprKind::Literal("t").into(),
+                    ExprKind::Literal("u").into(),
+                ]).into(),
+                ExprKind::And(vec![
+                    ExprKind::Literal("v").into(),
+                    ExprKind::Literal("w").into(),
+                ]).into(),
+            ]).into(),
+            ExprKind::Literal("x").into(),
+            ExprKind::And(vec![
+                ExprKind::Literal("y").into(),
+                ExprKind::Literal("z").into(),
+            ]).into(),
+        ]).into();
+        let normalized = ExprKind::And(vec![
+            ExprKind::Literal("p").into(),
+            ExprKind::Literal("q").into(),
+            ExprKind::Literal("r").into(),
+            ExprKind::Literal("s").into(),
+            ExprKind::Literal("t").into(),
+            ExprKind::Literal("u").into(),
+            ExprKind::Literal("v").into(),
+            ExprKind::Literal("w").into(),
+            ExprKind::Literal("x").into(),
+            ExprKind::Literal("y").into(),
+            ExprKind::Literal("z").into(),
+        ]).into();
+        assert_eq!(expr.normalize_negations(), normalized);
+    }
+
+    #[test]
+    fn to_clauses_0() {
+        let expr = ExprKind::Or(vec![
+            ExprKind::And(vec![
+                ExprKind::Literal("day").into(),
+                ExprKind::Literal("night").into(),
+            ]).into(),
+            ExprKind::And(vec![
+                ExprKind::Literal("love").into(),
+                ExprKind::Literal("war").into(),
+            ]).into()
+        ]).into();
+        // (day and night) or (love and war)
+        // (day or (love and war)) and (night or (love and war))
+        // (day or love) and (day or war) and (night or love) and (night or war)
+        let mut interner = ClauseInterner::new();
+        let mut clause_set_expected = IndexSet::new();
+        interner.intern_and_insert(&mut clause_set_expected, clause!(day, love));
+        interner.intern_and_insert(&mut clause_set_expected, clause!(day, war));
+        interner.intern_and_insert(&mut clause_set_expected, clause!(night, love));
+        interner.intern_and_insert(&mut clause_set_expected, clause!(night, war));
+
+        let mut clause_set_actual = IndexSet::new();
+        expr.into_clauses(&mut clause_set_actual, &mut interner);
+
+        assert_eq!(clause_set_actual, clause_set_expected);
     }
 
 

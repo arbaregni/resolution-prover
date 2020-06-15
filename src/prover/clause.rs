@@ -12,18 +12,18 @@ macro_rules! clause {
         crate::prover::Clause::empty()
     };
     ($term:ident) => {
-        $crate::prover::Clause::empty().set( stringify!($term) , true)
+        $crate::prover::Clause::empty().set( stringify!($term).to_string() , true)
     };
     ( ~ $term:ident) => {
-        crate::prover::Clause::empty().set( stringify!($term) , false)
+        crate::prover::Clause::empty().set( stringify!($term).to_string() , false)
     };
     // the recursive, truthy case
     ( $term:ident, $($tail:tt)*) => {
-        clause!( $($tail)+ ).set( stringify!($term) , true)
+        clause!( $($tail)+ ).set( stringify!($term).to_string() , true)
     };
     // the recursive, falsy case
     ( ~ $term:ident, $($tail:tt)*) => {
-        clause!( $($tail)* ).set( stringify!($term) , false);
+        clause!( $($tail)* ).set( stringify!($term).to_string() , false);
     };
 }
 
@@ -42,9 +42,13 @@ impl Clause {
         Clause { terms: BTreeMap::new() }
     }
     /// Set a variable name to a specific truth-value, returning `self`
-    pub fn set(mut self, var_name: &str, truth_value: bool) -> Clause {
-        self.terms.insert(var_name.to_string(), truth_value);
+    pub fn set(mut self, var_name: String, truth_value: bool) -> Clause {
+        self.insert(var_name, truth_value);
         self
+    }
+    /// Inserts a specific variable name with its truth-value
+    pub fn insert(&mut self, var_name: String, truth_value: bool) {
+        self.terms.insert(var_name, truth_value);
     }
     /// apply the resolution rule to two clauses
     /// the new clause contains all non-complementary terms
@@ -145,7 +149,7 @@ impl ClauseInterner {
     pub fn get(&self, id: ClauseId) -> &Clause {
         self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
     }
-    pub fn intern_and_insert(&mut self, clauses: &mut IndexSet<ClauseId>, clause: Clause) {
-        clauses.insert(self.intern_clause(clause));
+    pub fn intern_and_insert(&mut self, clause_set: &mut IndexSet<ClauseId>, clause: Clause) {
+        clause_set.insert(self.intern_clause(clause));
     }
 }
