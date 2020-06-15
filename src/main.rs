@@ -4,7 +4,7 @@ mod prover;
 mod ast;
 
 fn main() {
-    let source = "not not not andy";
+    let source = "(me and you) or (us and them)";
     let expr = match ast::parse(source) {
         Ok(expr) => expr,
         Err(why) => {
@@ -17,5 +17,9 @@ fn main() {
     let expr = expr.normalize_negations();
 
     println!("normalized: {:#?}", expr);
+
+    let expr = expr.distribute_ors_inward();
+
+    println!("in cnf: {:#?}", expr);
 
 }
