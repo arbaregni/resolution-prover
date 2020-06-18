@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 indexmap = "1.4.0"
-fstrings = "0.2.3"
 itertools = "0.9.0"
 pest = "*"
 pest_derive = "2.1.0"
