@@ -88,7 +88,7 @@ mod tests {
         // king and not ace                               . negation of implication
         assert_eq!(success, false);
     }
-        #[test]
+    #[test]
     fn simple_proof_4() {
         let givens = vec![
             "(king implies ace) or (not king implies ace)",

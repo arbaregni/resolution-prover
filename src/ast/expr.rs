@@ -206,14 +206,14 @@ impl <'a> Expr<'a> {
             Literal(name) => clause.insert(name.to_string(), true),
             Not(inner) => {
                 if let Literal(name) = *inner.kind {
-                    clause.insert(name.to_string(), false);
+                    clause.insert(name.to_string(), false)
                 } else {
                     panic!("calling make_clause helper on non-normalized expr Not({:?})", inner)
                 }
             }
             Or(exprs) => {
                 for expr in exprs {
-                    expr.make_clause(clause);
+                    expr.make_clause(clause)
                 }
             }
             _ => panic!("calling make_clause helper on non-normalized expr {:?}", self)
@@ -228,7 +228,8 @@ impl <'a> Expr<'a> {
         self
             .normalize_negations()
             .distribute_ors_inward()
-            .make_clause_set(clause_set, interner)
+            .make_clause_set(clause_set, interner);
+        println!("interner: {:#?}, clause_set: {:?}", interner, clause_set);
     }
 }
 
