@@ -9,8 +9,7 @@ pub use parse::*;
 #[cfg(test)]
 mod tests {
     use crate::ast::{ExprKind, parse};
-    use crate::prover::ClauseInterner;
-    use indexmap::set::IndexSet;
+    use crate::prover::ClosedClauseSet;
 
     #[test]
     fn parse_simple_0() {
@@ -354,16 +353,14 @@ mod tests {
         // (day and night) or (love and war)
         // (day or (love and war)) and (night or (love and war))
         // (day or love) and (day or war) and (night or love) and (night or war)
-        let mut interner = ClauseInterner::new();
-        let mut clause_set_expected = IndexSet::new();
-        interner.intern_and_insert(&mut clause_set_expected, clause!(day, love));
-        interner.intern_and_insert(&mut clause_set_expected, clause!(day, war));
-        interner.intern_and_insert(&mut clause_set_expected, clause!(night, love));
-        interner.intern_and_insert(&mut clause_set_expected, clause!(night, war));
+        let mut clause_set  = ClosedClauseSet::new();
+        expr.into_clauses(&mut clause_set);
 
-        let mut clause_set_actual = IndexSet::new();
-        expr.into_clauses(&mut clause_set_actual, &mut interner);
+        assert_eq!(clause_set.clauses.len(), 4);
+        assert!(clause_set.clauses.contains( &clause!(day, love) ));
+        assert!(clause_set.clauses.contains( &clause!(day, war) ));
+        assert!(clause_set.clauses.contains( &clause!(night, love) ));
+        assert!(clause_set.clauses.contains( &clause!(night, war) ));
 
-        assert_eq!(clause_set_actual, clause_set_expected);
     }
 }

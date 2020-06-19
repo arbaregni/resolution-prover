@@ -1,62 +1,85 @@
 use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
+use std::collections::{HashMap};
 use indexmap::set::IndexSet;
 use std::fmt::Formatter;
 use std::fmt;
+use std::collections::BTreeMap;
+use itertools::Itertools;
+use std::cmp::Ordering;
 
-/// A recursive macro that constructs a clause from terms
-#[macro_export]
-macro_rules! clause {
+/// A recursive macro that builds a clause from terms
+macro_rules! clause_builder {
     // the base case: the empty clause
     () => {
-        crate::prover::Clause::empty()
+        crate::prover::ClauseBuilder::new()
     };
     ($term:ident) => {
-        $crate::prover::Clause::empty().set( stringify!($term).to_string() , true)
+        $crate::prover::ClauseBuilder::new().set( stringify!($term), true)
     };
     ( ~ $term:ident) => {
-        crate::prover::Clause::empty().set( stringify!($term).to_string() , false)
+        crate::prover::ClauseBuilder::new().set( stringify!($term), false)
     };
     // the recursive, truthy case
     ( $term:ident, $($tail:tt)*) => {
-        clause!( $($tail)+ ).set( stringify!($term).to_string() , true)
+        clause_builder!( $($tail)+ ).set( stringify!($term), true)
     };
     // the recursive, falsy case
     ( ~ $term:ident, $($tail:tt)*) => {
-        clause!( $($tail)* ).set( stringify!($term).to_string() , false);
+        clause_builder!( $($tail)* ).set( stringify!($term), false)
     };
+}
+/// Creates and finishes a clause builder on the given terms
+#[macro_export]
+macro_rules! clause {
+    ( $($term:tt)* ) => {
+        clause_builder!( $($term)* ).finish().expect("hard-coded tautology")
+    }
 }
 
 /// Any number of terms, at least one of which is true
 /// (the empty clause, of course, represents paradox)
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Clause {
-    /// maps a variable's name to it's truth value
-    /// i.e, the clause `{p, ~q}` is represented by `{"p": true, "q": false}`
-    terms: BTreeMap<String, bool>,
-    /// set to true if the clause always becomes a tautology,
-    /// i.e. both `p` and `~p` are present
+pub struct Clause<'a> {
+    /// sorted vector of `(variable_name, truth_value)`, no duplicate variable names
+    terms: Vec<(&'a str, bool)>,
+}
+
+pub struct ClauseBuilder<'a> {
+    terms: BTreeMap<&'a str, bool>,
     is_tautology: bool,
 }
 
-// TODO streamline clauses
-// - bugs if both p and ~p are present in the clause (see king/ace test)
-// - the clause is necessarily true, but we shouldn't cancel it immediately
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+/// id's used to reference interned clauses
+pub struct ClauseId(usize);
 
-impl Clause {
+#[derive(Debug)]
+/// interns clauses, and provides lookup by variable and truth value
+pub struct ClosedClauseSet<'a> {
+    /// the set of all clauses we have encountered thus far
+    pub clauses: IndexSet<Clause<'a>>,
+    /// maps `(variable_name, truth_value)` to vectors of clauses,
+    /// which contain that `variable_name` with that `truth_value`
+    term_map: HashMap<(&'a str, bool), Vec<ClauseId>>
+}
+
+impl <'a> ClauseBuilder<'a> {
     /// Creates the empty clause
-    pub fn empty() -> Clause {
-        Clause { terms: BTreeMap::new(), is_tautology: false }
+    pub fn new() -> ClauseBuilder<'a> {
+        ClauseBuilder {
+            terms: BTreeMap::new(),
+            is_tautology: false
+        }
     }
     /// Set a variable name to a specific truth-value, returning `self`
     #[allow(dead_code)]
-    pub fn set(mut self, var_name: String, truth_value: bool) -> Clause {
+    pub fn set(mut self, var_name: &'a str, truth_value: bool) -> ClauseBuilder {
         self.insert(var_name, truth_value);
         self
     }
     /// Inserts a specific variable name with its truth-value,
     /// returns `true` if a tautology is created
-    pub fn insert(&mut self, var_name: String, truth_value: bool) {
+    pub fn insert(&mut self, var_name: &'a str, truth_value: bool) {
         if self.is_tautology { return; }
         match self.terms.entry(var_name) {
             Entry::Vacant(entry) => {
@@ -65,12 +88,20 @@ impl Clause {
             Entry::Occupied(entry) => {
                 if *entry.get() != truth_value {
                     self.is_tautology = true;
-                    return;
                 }
             },
         }
     }
-    /// apply the resolution rule to two clauses
+    pub fn finish(self) -> Option<Clause<'a>> {
+        if self.is_tautology { return None; }
+        let terms = self.terms
+            .into_iter()
+            .collect_vec();
+        Some(Clause { terms })
+    }
+}
+impl <'a> Clause<'a> {
+    /// apply the resolution rule to two clauses, which are guaranteed to have EXACTLY one conflict
     /// the new clause contains all non-complementary terms
     /// For example, suppose we have
     ///     `{p, q}` (p is true OR q is true)
@@ -78,43 +109,50 @@ impl Clause {
     /// Then, it must be the case that p is true, OR r is true,
     ///       and we don't know anything about q. This gives us:
     ///     `{p, r}` (p is true OR r is true)
-    ///
-    /// Returns `None` if there are resolution conflicts.
-    /// In this case, resolving two closes only creates tautologies
-    /// For example, suppose we have
-    ///     `{p, q, r, ...}`
-    ///     `{~p, ~q, s, ...}`
-    ///     ------------------
-    ///      `{q, ~q, r, s, ....}` which is true regardless of `q`'s truth value
-    ///      `{p, ~p, r, s, ....}`
-    #[allow(dead_code)]
-    pub fn resolve(&self, other: &Clause) -> Option<Clause> {
-        let mut canceled_terms = false; // set to true if we have canceled terms
-        let mut resolvant_terms = BTreeMap::new();
-        let iter = self.terms.iter()
-            .chain(other.terms.iter());
-        for (name, &truth_value) in iter {
-            let key = name.to_string();
-            match resolvant_terms.entry(key) {
-                Entry::Vacant(entry) => {
-                    entry.insert(truth_value);
-                },
-                Entry::Occupied(entry) => {
-                    if *entry.get() != truth_value {
-                        // we have a paradox: neither term is necessarily a possibility,
-                        // so we don't include it in the new clause
-                        if canceled_terms {
-                            // we include both the variable and it's negation
-                            // BUT that's a tautology, so we return None
-                            return None;
+    pub fn resolve(&self, other: &Clause<'a>) -> Clause<'a> {
+        let capacity = self.terms.len() + other.terms.len() - 1;
+        let mut resolvant_terms = Vec::with_capacity(capacity);
+        let mut left_iter = self.terms.iter().peekable();
+        let mut right_iter = other.terms.iter().peekable();
+        loop {
+            match (left_iter.peek(), right_iter.peek()) {
+                // there are two sides
+                ( Some((lname, ltruth)), Some((rname, rtruth)) ) => match lname.cmp(rname) {
+                    Ordering::Less => {
+                        // process the left side
+                        left_iter.next();
+                        resolvant_terms.push( (*lname, *ltruth));
+                    },
+                    Ordering::Greater => {
+                        // process the right side
+                        right_iter.next();
+                        resolvant_terms.push( (*rname, *rtruth));
+                    },
+                    Ordering::Equal => {
+                        // present the same variable, process both
+                        left_iter.next(); right_iter.next();
+                        if ltruth == rtruth {
+                            // terms are the same, it's just a redundancy
+                            resolvant_terms.push( (*lname, *rtruth));
+                        } else {
+                            // these are the conflicting terms, and we do not include them
                         }
-                        entry.remove();
-                        canceled_terms = true;
-                    }
+                    },
+                },
+                // there is only the left to process
+                ( Some((name, truth)), None ) => {
+                    left_iter.next();
+                    resolvant_terms.push((*name, *truth));
                 }
+                // there is only the right to process
+                ( None, Some((name, truth)) ) => {
+                    right_iter.next();
+                    resolvant_terms.push((*name, *truth));
+                }
+                (None, None) => { break; }
             }
         }
-        Some(Clause { terms: resolvant_terms, is_tautology: false })
+        Clause { terms: resolvant_terms }
     }
     /// Returns true if this is the empty clause, i.e falso
     #[allow(dead_code)]
@@ -123,16 +161,77 @@ impl Clause {
     }
 }
 
-impl fmt::Debug for Clause {
+impl <'a> ClosedClauseSet<'a> {
+    #[allow(dead_code)]
+    pub fn new() -> ClosedClauseSet<'a> {
+        ClosedClauseSet {
+            clauses: IndexSet::new(),
+            term_map: HashMap::new(),
+        }
+    }
+    /// get all clauses who have exactly one conflict with `clause`
+    pub fn clauses_with_one_conflict<'s>(&self, clause: &Clause<'a>) -> Vec<ClauseId>
+        where 'a: 's
+    {
+        // count the number of times we visit each clause id
+        let num_clauses = self.clauses.len();
+        let mut counts = Vec::with_capacity(num_clauses);
+        for _ in 0..num_clauses { counts.push(0); }
+
+        // iterate over the terms in `clause`
+        for (name, truth_value) in clause.terms.iter() {
+            // increment the count of each clause with the same name, but opposite truth_value
+            for clause_id in self.term_map[&(*name, !*truth_value)].iter() {
+                counts[clause_id.0] += 1;
+            }
+        }
+        // now, we take only those with exactly `1` count
+        counts.iter()
+            .enumerate()
+            .filter_map(|(idx, count)| {
+                if *count == 1 {
+                    Some( ClauseId(idx) )
+                } else {
+                    None
+                }
+            })
+            .collect()
+
+    }
+    /// Inserts the clause, providing the index into the set
+    pub fn integrate_clause(&mut self, clause: Clause<'a>) -> ClauseId {
+        let (idx, _) = self.clauses.insert_full(clause);
+        let clause_id = ClauseId(idx);
+        let clause: &Clause = self.clauses.get_index(idx).expect("missing clause");
+        for (name, truth_value) in clause.terms.iter() {
+            // add the name, and truth value to the term map
+            self.term_map.entry((*name, *truth_value))
+                .or_insert(Vec::with_capacity(1))
+                .push(clause_id);
+            // make sure the negation also exists
+            self.term_map.entry((*name, !*truth_value))
+                .or_insert(Vec::new());
+        }
+        println!("integrated new clause, clauses: {:#?}", self.clauses);
+        clause_id
+    }
+    #[allow(dead_code)]
+    pub fn get<'s>(&'s self, id: ClauseId) -> &'s Clause<'a> {
+        self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
+    }
+}
+
+
+impl fmt::Debug for Clause<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{{")?;
         let mut first = true;
-        for (term, &truth_value) in self.terms.iter() {
+        for (term, truth_value) in self.terms.iter() {
             if !first {
                 write!(f, ", ")?;
             }
             first = false;
-            if truth_value {
+            if *truth_value {
                 write!(f, "{}", term)?;
             } else {
                 write!(f, "~{}", term)?;
@@ -143,34 +242,15 @@ impl fmt::Debug for Clause {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct ClauseId(usize);
-
 impl fmt::Debug for ClauseId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Clause {}", self.0)
     }
 }
-#[derive(Debug)]
-pub struct ClauseInterner {
-    clauses: IndexSet<Clause>,
-}
+/*
+impl fmt::Debug for ClosedClauseSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 
-impl ClauseInterner {
-    #[allow(dead_code)]
-    pub fn new() -> ClauseInterner {
-        ClauseInterner { clauses: IndexSet::new() }
-    }
-    pub fn intern_clause(&mut self, clause: Clause) -> ClauseId {
-        let (idx, _) = self.clauses.insert_full(clause);
-        ClauseId(idx)
-    }
-    #[allow(dead_code)]
-    pub fn get(&self, id: ClauseId) -> &Clause {
-        self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
-    }
-    pub fn intern_and_insert(&mut self, clause_set: &mut IndexSet<ClauseId>, clause: Clause) {
-        if clause.is_tautology { return; }
-        clause_set.insert(self.intern_clause(clause));
     }
 }
+ */

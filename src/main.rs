@@ -86,6 +86,7 @@ mod tests {
         // not king implies ace                           . vacuous implication
         // not (king implies ace)                         . by the xor
         // king and not ace                               . negation of implication
+        // we should NOT be able to prove that `ace` is true
         assert_eq!(success, false);
     }
     #[test]

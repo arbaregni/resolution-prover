@@ -1,7 +1,6 @@
 use map_in_place::MapVecInPlace;
 use itertools::Itertools;
-use indexmap::set::IndexSet;
-use crate::prover::{ClauseId, ClauseInterner, Clause};
+use crate::prover::{ClosedClauseSet, ClauseBuilder};
 use std::fmt::Formatter;
 use std::{fmt, iter};
 
@@ -123,7 +122,7 @@ impl <'a> Expr<'a> {
     /// removes redundant `Or`s and `And`s
     #[allow(dead_code)]
     pub fn distribute_ors_inward(self) -> Expr<'a> {
-        println!("distributing ors inward on {:#?}", self);
+        // println!("distributing ors inward on {:#?}", self);
         use ExprKind::*;
         match *self.kind {
             Or(mut or_terms) => {
@@ -176,22 +175,24 @@ impl <'a> Expr<'a> {
     ///  - if `Not` surround anything but a `Literal`
     ///  - if `Or`s surround any `And`s
     #[allow(dead_code)]
-    pub fn make_clause_set(self, clause_set: &mut IndexSet<ClauseId>, interner: &mut ClauseInterner) {
-        println!("making into a clause set: {:#?}", self);
+    pub fn make_clause_set(self, clause_set: &mut ClosedClauseSet<'a>) {
+        // println!("making into a clause set: {:#?}", self);
         use ExprKind::*;
         match *self.kind {
             // there is only one clause
             Literal(_) | Not(_) | Or(_) => {
-                let mut clause = Clause::empty();
-                self.make_clause(&mut clause);
-                interner.intern_and_insert(clause_set, clause);
+                let mut builder = ClauseBuilder::new();
+                self.make_clause(&mut builder);
+                if let Some(clause) = builder.finish() {
+                    clause_set.integrate_clause(clause);
+                }
             }
             And(exprs) => {
                 // ands must be on the highest level
                 // we go through each of the sub-exprs and
                 // add whatever clauses they produce
                 for expr in exprs {
-                    expr.make_clause_set(clause_set, interner);
+                    expr.make_clause_set(clause_set);
                 }
             }
             _ => panic!("calling make_clause helper on non-normalized expr {:?}", self)
@@ -200,36 +201,37 @@ impl <'a> Expr<'a> {
     /// adds the current expression to the clause
     /// panicking if it can not be done (i.e. it was an `And` or `If`)
     #[allow(dead_code)]
-    fn make_clause(self, clause: &mut Clause) {
+    fn make_clause(self, builder: &mut ClauseBuilder<'a>) {
         use ExprKind::*;
         match *self.kind {
-            Literal(name) => clause.insert(name.to_string(), true),
+            Literal(name) => {
+                builder.insert(name, true);
+            },
             Not(inner) => {
                 if let Literal(name) = *inner.kind {
-                    clause.insert(name.to_string(), false)
+                    builder.insert(name, false);
                 } else {
                     panic!("calling make_clause helper on non-normalized expr Not({:?})", inner)
                 }
             }
             Or(exprs) => {
                 for expr in exprs {
-                    expr.make_clause(clause)
+                    expr.make_clause(builder);
                 }
             }
             _ => panic!("calling make_clause helper on non-normalized expr {:?}", self)
-        }
+        };
     }
 
     /// Convert an expression to clausal normal form,
     /// inserting all new clauses into the clause set
     #[allow(dead_code)]
-    pub fn into_clauses(self, clause_set: &mut IndexSet<ClauseId>, interner: &mut ClauseInterner) {
-        println!("converting to clauses: {:#?}", self);
+    pub fn into_clauses(self, clause_set: &mut ClosedClauseSet<'a>) {
+        println!("converting: {:?}", self);
         self
             .normalize_negations()
             .distribute_ors_inward()
-            .make_clause_set(clause_set, interner);
-        println!("interner: {:#?}, clause_set: {:?}", interner, clause_set);
+            .make_clause_set(clause_set);
     }
 }
 
