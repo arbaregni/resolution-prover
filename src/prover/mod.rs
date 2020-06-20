@@ -5,6 +5,19 @@ pub use clause::*;
 
 mod search;
 pub use search::*;
+use crate::ast;
+
+/// Parse and the givens and the goal,
+/// search for a proof, returning `Some(true)` on success, `Some(false)` otherwise
+/// returns `None` upon error
+pub fn service_proof_request(givens: &[&str], goal: &str) -> Result<bool, Box<(dyn std::error::Error + 'static)>> {
+    let givens = givens
+        .iter()
+        .map(|&source| ast::parse(source))
+        .collect::<Result<Vec<_>, _>>()?;
+    let goal = ast::parse(goal)?;
+    Ok( find_proof(givens, goal) )
+}
 
 #[cfg(test)]
 mod tests {
