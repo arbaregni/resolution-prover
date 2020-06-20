@@ -2,6 +2,7 @@
 #[macro_use]
 mod prover;
 mod ast;
+mod client;
 
 use std::env;
 
