@@ -216,7 +216,27 @@ mod tests {
     }
     #[test]
     fn provability_simple_3() {
+        let givens = vec![
+            ExprKind::Or(vec![
+                ExprKind::Literal("p").into(),
+                ExprKind::Not(
+                    ExprKind::Literal("q").into(),
+                ).into(),
+             ]).into(),
+            ExprKind::Or(vec![
+                ExprKind::Literal("q").into(),
+                ExprKind::Not(
+                    ExprKind::Literal("p").into(),
+                ).into(),
+            ]).into(),
+        ];
+        // this is a consistent set of givens
+        // we should NOT be able to prove an arbitrary formula
+        let goal = ExprKind::Literal("zeta").into();
+
+        assert_eq!(find_proof(givens, goal), false);
     }
+
     #[test]
     fn provability_medium_0() {
         let givens = vec![
