@@ -227,7 +227,7 @@ impl <'a> Expr<'a> {
     /// inserting all new clauses into the clause set
     #[allow(dead_code)]
     pub fn into_clauses(self, clause_set: &mut ClosedClauseSet<'a>) {
-        println!("converting: {:?}", self);
+        // println!("converting: {:?}", self);
         self
             .normalize_negations()
             .distribute_ors_inward()

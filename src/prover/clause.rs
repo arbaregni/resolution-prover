@@ -212,7 +212,7 @@ impl <'a> ClosedClauseSet<'a> {
             self.term_map.entry((*name, !*truth_value))
                 .or_insert(Vec::new());
         }
-        println!("integrated new clause, clauses: {:#?}", self.clauses);
+        // println!("integrated new clause, clauses: {:#?}", self.clauses);
         clause_id
     }
     #[allow(dead_code)]

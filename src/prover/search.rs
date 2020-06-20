@@ -14,7 +14,7 @@ pub fn find_proof(givens: Vec<Expr<'_>>, goal: Expr<'_>) -> bool {
     goal
         .negate()
         .into_clauses(&mut clause_set);
-    println!("clause_set: {:#?}", clause_set);
+    // println!("clause_set: {:#?}", clause_set);
     // search for the contradiction
     clause_set.has_contradiction()
 }
@@ -35,8 +35,8 @@ impl ClosedClauseSet<'_> {
                     .map(|prev| clause.resolve(prev))
                     .collect::<Vec<Clause>>();
 
-                println!("============================================================");
-                println!("resolving {:?} produced: {:?}", clause, resolvants);
+                // println!("============================================================");
+                // println!("resolving {:?} produced: {:?}", clause, resolvants);
 
                 for resolvant in resolvants.into_iter() {
                     if resolvant.is_empty() {
@@ -45,7 +45,7 @@ impl ClosedClauseSet<'_> {
                     self.integrate_clause(resolvant);
                 }
 
-                println!("current set: {:#?}", self);
+                // println!("current set: {:#?}", self);
 
                 // advance the cutoff
                 cutoff += 1;
