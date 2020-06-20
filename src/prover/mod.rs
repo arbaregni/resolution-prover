@@ -8,150 +8,158 @@ pub use search::*;
 
 #[cfg(test)]
 mod tests {
-    use indexmap::set::IndexSet;
-    use crate::prover::{Clause, ClauseInterner, has_contradiction, find_proof};
+    use crate::prover::{Clause, ClosedClauseSet, find_proof, ClauseBuilder};
     use crate::ast::ExprKind;
 
     #[test]
     fn clause_builder_0() {
-        let clause = Clause::empty()
-            .set("p".to_string(), true)
-            .set("q".to_string(), false)
-            .set("r".to_string(), false)
-            .set("s".to_string(), true);
+        let clause = ClauseBuilder::new()
+            .set("p", true)
+            .set("q", false)
+            .set("r", false)
+            .set("s", true)
+            .finish().expect("not a tautology");
         assert_eq!(clause!(p, ~q, ~r, s), clause);
     }
     #[test]
     fn clause_builder_1() {
-        let clause = Clause::empty()
-            .set("p".to_string(), false)
-            .set("q".to_string(), true)
-            .set("r".to_string(), false)
-            .set("s".to_string(), true)
-            .set("t".to_string(), false);
+        let clause = ClauseBuilder::new()
+            .set("p", false)
+            .set("q", true)
+            .set("r", false)
+            .set("s", true)
+            .set("t", false)
+            .finish().expect("not a tautology");
         assert_eq!(clause!(~p, q, ~r, s, ~t), clause);
     }
     #[test]
     fn clause_builder_2() {
-        assert_eq!(clause!(), Clause::empty());
+        let clause = ClauseBuilder::new()
+            .finish().expect("not a tautology");
+        assert_eq!(clause!(), clause);
     }
 
     #[test]
     fn resolution_simple_0() {
         let a = clause!(p, q);
         let b = clause!(~q, r);
-        assert_eq!(Clause::resolve(&a, &b), Some(clause!(p, r)));
+        assert_eq!(Clause::resolve(&a, &b), clause!(p, r));
     }
     #[test]
     fn resolution_simple_1() {
         let a = clause!(~p, q); // equivalent to p -> q
         let b = clause!(p);
-        assert_eq!(Clause::resolve(&a, &b), Some(clause!(q)));
+        assert_eq!(Clause::resolve(&a, &b), clause!(q));
     }
     #[test]
     fn resolution_simple_2() {
         let a = clause!(p);
         let b = clause!(~p);
-        assert_eq!(Clause::resolve(&a, &b), Some(clause!()));
+        assert_eq!(Clause::resolve(&a, &b), clause!());
     }
     #[test]
     fn resolution_simple_3() {
         let a = clause!(~m, p, q);
         let b = clause!(~p, q);
-        assert_eq!(Clause::resolve(&a, &b), Some(clause!(~m, q)));
+        assert_eq!(Clause::resolve(&a, &b), clause!(~m, q));
     }
     #[test]
-    fn resolution_tautology_0() {
-        let a = clause!(p, q);
-        let b = clause!(~p, ~q);
-        assert_eq!(Clause::resolve(&a, &b), None);
+    fn builder_tautology_0() {
+        let opt_clause = ClauseBuilder::new()
+            .set("p", true)
+            .set("p", false)
+            .finish();
+        assert_eq!(opt_clause, None);
     }
     #[test]
-    fn resolution_tautology_1() {
-        let a = clause!(s, r, t, p, q);
-        let b = clause!(~p, ~q);
-        assert_eq!(Clause::resolve(&a, &b), None);
-    }
-    #[test]
-    fn resolution_tautology_2() {
-        let a = clause!(~s, ~r, p, q);
-        let b = clause!(~p, ~q, s, r);
-        assert_eq!(Clause::resolve(&a, &b), None);
+    fn builder_redundant_0() {
+        let opt_clause = ClauseBuilder::new()
+            .set("q", true)
+            .set("q", true)
+            .set("p", false)
+            .finish();
+        let expected = Some(clause!(~p, q));
+        assert_eq!(opt_clause, expected);
     }
 
     #[test]
     fn clause_intern_0() {
-        let mut interner = ClauseInterner::new();
+        let mut interner = ClosedClauseSet::new();
 
-        let a = interner.intern_clause(clause!(p, ~q, r));
-        let b = interner.intern_clause(clause!(p, ~q, r));
+        let a = interner.integrate_clause(clause!(p, ~q, r));
+        let b = interner.integrate_clause(clause!(p, ~q, r));
         assert_eq!(a, b);
     }
 
+
     #[test]
     fn satisfy_simple_0() {
-        let mut clauses = IndexSet::new();
-        let mut interner = ClauseInterner::new();
+        let mut clause_set = ClosedClauseSet::new();
 
-        interner.intern_and_insert(&mut clauses, clause!()); // contradiction immediately
+        clause_set.integrate_clause(clause!()); // contradiction immediately
 
-        assert_eq!(has_contradiction(clauses, &mut interner), true); // make sure we recognize the falso in the premise
+        assert_eq!(clause_set.has_contradiction(), true); // make sure we recognize the falso in the premise
     }
     #[test]
     fn satisfy_simple_1() {
-        let mut clauses = IndexSet::new();
-        let mut interner = ClauseInterner::new();
+        let mut clause_set = ClosedClauseSet::new();
 
-        interner.intern_and_insert(&mut clauses, clause!(p));
-        interner.intern_and_insert(&mut clauses, clause!(~p));
+        clause_set.integrate_clause(clause!(p));
+        clause_set.integrate_clause(clause!(~p));
 
-        assert_eq!(has_contradiction(clauses, &mut interner), true); // both p and ~p is a contradiction
+        assert_eq!(clause_set.has_contradiction(), true); // both p and ~p is a contradiction
     }
     #[test]
     fn satisfy_simple_2() {
-        let mut clauses = IndexSet::new();
-        let mut interner = ClauseInterner::new();
+        let mut clause_set = ClosedClauseSet::new();
 
-        interner.intern_and_insert(&mut clauses, clause!(p, q)); // p or q
-        interner.intern_and_insert(&mut clauses, clause!(~p));   // not p, so q is true
-        interner.intern_and_insert(&mut clauses, clause!(~q));   // q is not true
+        clause_set.integrate_clause(clause!(p, q)); // p or q
+        clause_set.integrate_clause(clause!(~p));   // not p, so q is true
+        clause_set.integrate_clause(clause!(~q));   // q is not true
 
-        assert_eq!(has_contradiction(clauses, &mut interner), true); // both q and ~q is a contradiction
+        assert_eq!(clause_set.has_contradiction(), true); // both q and ~q is a contradiction
     }
     #[test]
     fn satisfy_simple_3() {
-        let mut clauses = IndexSet::new();
-        let mut interner = ClauseInterner::new();
+        let mut clause_set= ClosedClauseSet::new();
 
-        interner.intern_and_insert(&mut clauses, clause!(~p, q)); // p => q
-        interner.intern_and_insert(&mut clauses, clause!(p));     // p is true
-        interner.intern_and_insert(&mut clauses, clause!(q));     // q is true
+        clause_set.integrate_clause(clause!(~p, q)); // p => q
+        clause_set.integrate_clause(clause!(p));     // p is true
+        clause_set.integrate_clause(clause!(q));     // q is true
 
-        assert_eq!(has_contradiction(clauses, &mut interner), false);         // there is no contradiction
+        assert_eq!(clause_set.has_contradiction(), false);         // there is no contradiction
     }
     #[test]
     fn satisfy_simple_4() {
-        let mut clauses = IndexSet::new();
-        let mut interner = ClauseInterner::new();
+        let mut clause_set  = ClosedClauseSet::new();
 
-        interner.intern_and_insert(&mut clauses, clause!(~p, q));  // p => q
-        interner.intern_and_insert(&mut clauses, clause!(~q, r));  // q => r
-        interner.intern_and_insert(&mut clauses, clause!(p));      // p is true
-        interner.intern_and_insert(&mut clauses, clause!(~r));     // r is false
+        clause_set.integrate_clause(clause!(~p, q));  // p => q
+        clause_set.integrate_clause(clause!(~q, r));  // q => r
+        clause_set.integrate_clause(clause!(p));      // p is true
+        clause_set.integrate_clause(clause!(~r));     // r is false
 
-        assert_eq!(has_contradiction(clauses, &mut interner), true);        // there is a contradiction, because we can derive r
+        assert_eq!(clause_set.has_contradiction(), true);        // there is a contradiction, because we can derive r
     }
     #[test]
     fn satisfy_simple_5() {
-        let mut clauses = IndexSet::new();
-        let mut interner = ClauseInterner::new();
+        let mut clause_set = ClosedClauseSet::new();
 
-        interner.intern_and_insert(&mut clauses, clause!(p, q));   // p or q
-        interner.intern_and_insert(&mut clauses, clause!(~p, r));  // not p or q
-        interner.intern_and_insert(&mut clauses, clause!(~p, ~r)); // not p or not r
-        interner.intern_and_insert(&mut clauses, clause!(p, ~q));  // p or not q
+        clause_set.integrate_clause(clause!(p, q));   // p or q
+        clause_set.integrate_clause(clause!(~p, r));  // not p or r
+        clause_set.integrate_clause(clause!(~p, ~r)); // not p or not r
+        clause_set.integrate_clause(clause!(p, ~q));  // p or not q
 
-        assert_eq!(has_contradiction(clauses, &mut interner), true);        // there is a contradiction
+        // derivation of paradox:
+        // (1) p or q       given
+        // (2) p or ~q      given
+        // (3) p            resolution (1, 2)
+        // (4) ~p or r      given
+        // (5) r            resolution (3, 4)
+        // (6) ~p or ~r     given
+        // (7) ~r           resolution (3, 6)
+        // (8) {}           resolution (5, 7)
+
+        assert_eq!(clause_set.has_contradiction(), true);        // there is a contradiction
     }
 
     #[test]
@@ -208,7 +216,27 @@ mod tests {
     }
     #[test]
     fn provability_simple_3() {
+        let givens = vec![
+            ExprKind::Or(vec![
+                ExprKind::Literal("p").into(),
+                ExprKind::Not(
+                    ExprKind::Literal("q").into(),
+                ).into(),
+             ]).into(),
+            ExprKind::Or(vec![
+                ExprKind::Literal("q").into(),
+                ExprKind::Not(
+                    ExprKind::Literal("p").into(),
+                ).into(),
+            ]).into(),
+        ];
+        // this is a consistent set of givens
+        // we should NOT be able to prove an arbitrary formula
+        let goal = ExprKind::Literal("zeta").into();
+
+        assert_eq!(find_proof(givens, goal), false);
     }
+
     #[test]
     fn provability_medium_0() {
         let givens = vec![

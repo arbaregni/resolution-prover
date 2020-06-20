@@ -86,6 +86,7 @@ mod tests {
         // not king implies ace                           . vacuous implication
         // not (king implies ace)                         . by the xor
         // king and not ace                               . negation of implication
+        // we should NOT be able to prove that `ace` is true
         assert_eq!(success, false);
     }
     #[test]
@@ -103,6 +104,29 @@ mod tests {
         // not king implies ace                           . vacuous implication
         // not (king implies ace)                         . by the xor
         // king and not ace                               . negation of implication
+        assert_eq!(success, true);
+    }
+    #[test]
+    fn medium_proof_0() {
+        let givens = vec![
+            "(red and blue and green) or (red and blue and yellow) or (blue and green and orange) or (blue)",
+            "(red and lightning) or (red and fire) or (red and anger)",
+            "(blue implies water) or (blue implies sadness)",
+            "(yellow and orange) or (zeta and not zeta)",
+            "(yellow and orange) implies (not red and not green)",
+            "(water or sadness) implies tears"
+        ];
+        let goal = "tears";
+        let success = service_proof_request(givens.as_slice(), goal).expect("should not error");
+        // (yellow and orange) or (zeta and not zeta)           given
+        // (yellow and orange)                                  in either case, it follows trivially or by explosion
+        // (yellow and orange) implies (not red and not green)  given
+        // (not red and not green)                              follows from above
+        // blue                                                 blue is the only option from the first given since red and green are both false
+        // (blue implies water) or (blue implies sadness)       given
+        // (water or sadness)                                   since blue is true, it follows from the cases above
+        // (water or sadness) implies tears                     given
+        // tears  QED
         assert_eq!(success, true);
     }
 }
