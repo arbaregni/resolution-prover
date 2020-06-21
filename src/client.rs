@@ -2,7 +2,7 @@ use serenity::{
     prelude::*,
     model::prelude::*,
     framework::standard::{
-        CommandResult, Args, macros::{command, group},
+        CommandResult, Args, macros::{command, group, help},
     },
     Client,
 };
@@ -12,8 +12,13 @@ use serde::Deserialize;
 use serenity::framework::StandardFramework;
 use crate::prover;
 use serenity::utils::MessageBuilder;
+use serenity::framework::standard::{HelpOptions, CommandGroup, help_commands};
+use std::collections::HashSet;
 
 const CONFIG_FILE_PATH: &'static str = "config.toml";
+
+const PROVABLE_REACT: char = '✅';
+const UNPROVABLE_REACT: char = '❌';
 
 #[derive(Debug, Deserialize)]
 struct Config {
@@ -43,7 +48,23 @@ impl EventHandler for Handler {
 #[commands(verify)]
 struct General;
 
+#[help]
+#[max_levenshtein_distance(3)]
+#[command_not_found_text = "Could not find: `{}`."]
+fn my_help(
+    context: &mut Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>
+) -> CommandResult {
+    help_commands::with_embeds(context, msg, args, help_options, groups, owners)
+}
+
+
 #[command]
+#[description("attempts to prove the expression with no priors, reacting ✅ if a proof is found, ❌ otherwise.\nNOTE: this is not the same thing as being true or false.")]
 fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     let givens = vec![];
     let goal = args.message();
@@ -51,11 +72,7 @@ fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     match prover::service_proof_request(givens.as_slice(), goal) {
         Ok(success) => {
             // react to the message depending on whether we were able to prove the goal
-            let r = if success {
-                '✅'
-            } else {
-                '❌'
-            };
+            let r = if success { PROVABLE_REACT } else { UNPROVABLE_REACT };
             msg.react(ctx, r)?;
         }
         Err(err) => {
@@ -79,6 +96,7 @@ pub fn start() -> Result<(), Box<(dyn std::error::Error + 'static)>> {
         .configure(|c| c
             .prefix(config.prefix())
         )
+        .help(&MY_HELP)
         .group(&GENERAL_GROUP)
     );
     client.start()?;

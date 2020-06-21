@@ -4,10 +4,6 @@ mod prover;
 mod ast;
 mod client;
 
-use std::env;
-
-
-
 fn main() -> Result<(), ()> {
     if let Err(why) = client::start() {
         eprintln!("{}", why);
