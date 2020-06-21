@@ -8,6 +8,7 @@ use itertools::Itertools;
 use std::cmp::Ordering;
 
 /// A recursive macro that builds a clause from terms
+#[allow(unused_macros)]
 macro_rules! clause_builder {
     // the base case: the empty clause
     () => {
