@@ -45,7 +45,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(verify)]
+#[commands(about, verify)]
 struct General;
 
 #[help]
@@ -62,9 +62,23 @@ fn my_help(
     help_commands::with_embeds(context, msg, args, help_options, groups, owners)
 }
 
+#[command]
+#[description("about this project")]
+fn about(ctx: &mut Context, msg: &Message, _args: Args) -> CommandResult {
+    msg.channel_id.send_message(&ctx.http, |m| {
+        m.embed(|e| {
+            e.title("click for source")
+                .description(&format!("uses resolution to verify statements and proofs\nreacting means {} a proof is found, {} means no proof is found\n",
+                                       PROVABLE_REACT, UNPROVABLE_REACT)
+                )
+                .url("https://github.com/arbaregni/resolution-prover")
+        })
+    })?;
+    Ok( () )
+}
 
 #[command]
-#[description("attempts to prove the expression with no priors, reacting ✅ if a proof is found, ❌ otherwise.\nNOTE: this is not the same thing as being true or false.")]
+#[description("attempts to prove the expression with no priors\nNOTE: this is not the same thing as being true or false.")]
 fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     let givens = vec![];
     let goal = args.message();
