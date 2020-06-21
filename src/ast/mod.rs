@@ -57,6 +57,24 @@ mod tests {
             ExprKind::Literal("pleasant").into()
         ).into())
     }
+    #[test]
+    fn parse_simple_5() {
+        let source = "p iff q";
+        let expr = parse(source).expect("should not error");
+        assert_eq!(expr, ExprKind::Iff(
+            ExprKind::Literal("p").into(),
+            ExprKind::Literal("q").into(),
+        ).into())
+    }
+    #[test]
+    fn parse_simple_6() {
+        let source = "p xor q";
+        let expr = parse(source).expect("should not error");
+        assert_eq!(expr, ExprKind::Xor(
+            ExprKind::Literal("p").into(),
+            ExprKind::Literal("q").into(),
+        ).into())
+    }
 
     #[test]
     fn parse_failure_0() {

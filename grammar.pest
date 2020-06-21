@@ -18,6 +18,10 @@ and = { "and" | "&&" | "&" }
 
 implies = { "implies" | "=>" | "->" | "==>" | "-->" }
 
+bicond = { "iff" | "<=>" | "<->" | "<==>" | "<-->" }
+
+xor = { "xor" }
+
 parenthetical = { "(" ~ expr ~ ")" }
 
 term = _{
@@ -25,7 +29,7 @@ term = _{
 }
 
 operator = {
-    or | and | implies
+    or | and | implies | bicond | xor
 }
 
 expr = _{

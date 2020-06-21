@@ -16,6 +16,8 @@ pub enum ExprKind<'a> {
     Literal(&'a str),
     Not(Expr<'a>),
     If(Expr<'a>, Expr<'a>),
+    Iff(Expr<'a>, Expr<'a>),
+    Xor(Expr<'a>, Expr<'a>),
     Or(Vec<Expr<'a>>),
     And(Vec<Expr<'a>>),
 }
@@ -68,9 +70,27 @@ impl <'a> Expr<'a> {
                             consequence.negate().normalize_negations(),
                         ]).into()
                     }
-                    _ => {
-                        Not(negated).into()
+                    // negation of a biconditional is an exclusive or
+                    // `not (p iff q)` becomes `(p or q) and (~p or ~q)`
+                    Iff(p, q) => {
+                        let not_p = Not(p.clone()).into().normalize_negations();
+                        let not_q = Not(q.clone()).into().normalize_negations();
+                        And(vec![
+                            Or(vec![p, q]).into(),
+                            Or(vec![not_p, not_q]).into(),
+                        ]).into()
                     }
+                    // negation of exclusive or is a biconditional
+                    // `not (p xor q)` becomes `(p or ~q) and (p or ~q)`
+                    Xor(p, q) => {
+                        let not_p = Not(p.clone()).into().normalize_negations();
+                        let not_q = Not(q.clone()).into().normalize_negations();
+                        And(vec![
+                            Or(vec![not_p, q]).into(),
+                            Or(vec![p, not_q]).into(),
+                        ]).into()
+                    },
+                    Literal(_) => Not(negated).into(),
                 }
             }
             // convert `P implies Q` to `not P or Q`
@@ -79,6 +99,24 @@ impl <'a> Expr<'a> {
                 let other = consequence.normalize_negations();
                 Or(vec![negated, other]).into()
             }
+            // convert `P iff Q` to `(~P or Q) and (P or ~Q)``
+            Iff(p, q) => {
+                let not_p = Not(p.clone()).into().normalize_negations();
+                let not_q = Not(q.clone()).into().normalize_negations();
+                And(vec![
+                    Or(vec![not_p, q]).into(),
+                    Or(vec![p, not_q]).into(),
+                ]).into()
+            }
+            // convert `P xor Q` to (P or Q) and (~P or ~Q)
+            Xor(p, q) => {
+                let not_p = Not(p.clone()).into().normalize_negations();
+                let not_q = Not(q.clone()).into().normalize_negations();
+                And(vec![
+                    Or(vec![p, q]).into(),
+                    Or(vec![not_p, not_q]).into(),
+                ]).into()
+            },
             Or(subexprs) => {
                 // normalize all our subexpressions
                 // assume, inductively, that `Or`s have been flattened
@@ -161,8 +199,11 @@ impl <'a> Expr<'a> {
                     Or(or_terms).into()
                 }
             },
+            // simply recurse on all of our children
             And(exprs) => And(exprs.map_in_place(Expr::distribute_ors_inward)).into(),
             If(cond, cons) => If(cond.distribute_ors_inward(), cons.distribute_ors_inward()).into(),
+            Iff(p, q) => Iff(p.distribute_ors_inward(), q.distribute_ors_inward()).into(),
+            Xor(p, q) => Xor(p.distribute_ors_inward(), q.distribute_ors_inward()).into(),
             Not(inner) => Not(inner.distribute_ors_inward()).into(),
             Literal(_) => self,
         }
@@ -241,18 +282,27 @@ impl fmt::Debug for Expr<'_> {
             ExprKind::Literal(name) => write!(f, "{:?}", name)?,
             ExprKind::Not(inner) => write!(f, "Not({:?})", inner)?,
             ExprKind::If(cond, cons) => write!(f, "Implies({:?} => {:?})", cond, cons)?,
+            ExprKind::Iff(p, q) => {
+                write!(f, "Iff[")?;
+                f.debug_list().entry(p).entry(q).finish()?;
+                write!(f, "]")?;
+            },
+            ExprKind::Xor(p, q) => {
+                write!(f, "Xor[")?;
+                f.debug_list().entry(p).entry(q).finish()?;
+                write!(f, "]")?;
+            },
             ExprKind::Or(exprs) => {
-                write!(f, "Or(")?;
+                write!(f, "Or[")?;
                 f.debug_list().entries(exprs.clone()).finish()?;
-                write!(f, ")")?;
+                write!(f, "]")?;
             },
             ExprKind::And(exprs) => {
-                write!(f, "And(")?;
+                write!(f, "And[")?;
                 f.debug_list().entries(exprs.clone()).finish()?;
-                write!(f, ")")?;
+                write!(f, "]")?;
             },
         };
         Ok( () )
     }
 }
-

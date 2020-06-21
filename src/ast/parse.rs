@@ -51,26 +51,48 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, Error<Rule>> {
             }
         }
     }
-    let expr = match operator.map(|p| p.as_rule()) {
+    let expr = match operator.map(|p| (p.as_rule(), p)) {
         None => {
             // the parsing rules should prevent two adjacent terms
             assert_eq!(1, terms.len());
             terms.pop().unwrap()
         }
-        Some(Rule::implies) => {
+        Some((Rule::implies, _)) => {
             // the parsing rules should prevent chaining implications w/o parens
             assert_eq!(2, terms.len());
             let last = terms.pop().unwrap();
             let first = terms.pop().unwrap();
             ExprKind::If(first, last).into()
         }
-        Some(Rule::and) => {
+        Some((Rule::bicond, p)) => {
+            if terms.len() != 2 {
+                let variant = ErrorVariant::CustomError {
+                    message: "biconditional chains are not supported yet".to_string()
+                };
+                return Err(Error::new_from_span(variant, p.as_span()));
+            }
+            let last = terms.pop().unwrap();
+            let first = terms.pop().unwrap();
+            ExprKind::Iff(first, last).into()
+        }
+        Some((Rule::xor, p)) => {
+            if terms.len() != 2 {
+                let variant = ErrorVariant::CustomError {
+                    message: "exclusive or chains are not supported yet".to_string()
+                };
+                return Err(Error::new_from_span(variant, p.as_span()));
+            }
+            let last = terms.pop().unwrap();
+            let first = terms.pop().unwrap();
+            ExprKind::Xor(first, last).into()
+        }
+        Some((Rule::and, _)) => {
             ExprKind::And(terms).into()
         }
-        Some(Rule::or) => {
+        Some((Rule::or, _)) => {
             ExprKind::Or(terms).into()
         }
-        Some(rule) => {
+        Some((rule, _)) => {
             panic!("`{:?}` is not a valid operator", rule)
         }
     };
@@ -90,7 +112,7 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, Error<Rule>> {
             parse_expr(pair.into_inner())?
         }
         // we're not expecting operators or EOI here
-        Rule::operator | Rule::or | Rule::and | Rule::implies | Rule::EOI => {
+        Rule::operator | Rule::or | Rule::and | Rule::implies | Rule::xor | Rule::bicond | Rule::EOI => {
             panic!("unexpected operator or EOI {} in parse_term", pair.as_str())
         }
         // silent rules produce nothing
