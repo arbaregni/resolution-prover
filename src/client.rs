@@ -40,7 +40,7 @@ impl Config {
 struct Handler;
 impl EventHandler for Handler {
     fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+        info!("{} is connected!", ready.user.name);
     }
 }
 
@@ -68,7 +68,6 @@ fn my_help(
 fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     let givens = vec![];
     let goal = args.message();
-    println!("servicing request for {}, sent at {}", msg.author.name, msg.timestamp);
     match prover::service_proof_request(givens.as_slice(), goal) {
         Ok(success) => {
             // react to the message depending on whether we were able to prove the goal
@@ -81,9 +80,7 @@ fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
                 .push_bold("Error with verify command\n")
                 .push(why.as_str())
                 .build();
-            if let Err(why) = msg.channel_id.say(&ctx.http, &response) {
-                println!("error sending message: {:?}", why);
-            }
+            msg.channel_id.say(&ctx.http, &response)?;
         }
     }
     Ok( () )
@@ -97,6 +94,16 @@ pub fn start() -> Result<(), Box<(dyn std::error::Error + 'static)>> {
             .prefix(config.prefix())
         )
         .help(&MY_HELP)
+        .before(|_, msg, cmd_name| {
+            info!("running command `{}` for {}, sent at {}", cmd_name, msg.author.name, msg.timestamp);
+            true
+        })
+        .after(|_, msg, cmd_name, error| {
+           if let Err(why) = error {
+               error!("error running command `{}` for {}, sent at {}: {:?}",
+                      cmd_name, msg.author.name, msg.timestamp, why);
+           }
+        })
         .group(&GENERAL_GROUP)
     );
     client.start()?;
