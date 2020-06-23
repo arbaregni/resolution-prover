@@ -93,7 +93,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, Error<Rule>> {
             ExprKind::Or(terms).into()
         }
         Some((rule, _)) => {
-            panic!("`{:?}` is not a valid operator", rule)
+            error!("`{:?}` is not a valid operator", rule)
         }
     };
     Ok(expr)
@@ -113,11 +113,11 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, Error<Rule>> {
         }
         // we're not expecting operators or EOI here
         Rule::operator | Rule::or | Rule::and | Rule::implies | Rule::xor | Rule::bicond | Rule::EOI => {
-            panic!("unexpected operator or EOI {} in parse_term", pair.as_str())
+            error!("unexpected operator or EOI {} in parse_term", pair.as_str())
         }
         // silent rules produce nothing
           Rule::WHITESPACE | Rule::reserved
-        | Rule::expr | Rule::source | Rule::term | Rule::not => panic!("rule {:?} should produce nothing", pair.as_rule())
+        | Rule::expr | Rule::source | Rule::term | Rule::not => error!("rule {:?} should produce nothing", pair.as_rule())
     };
     Ok(expr)
 }

@@ -244,7 +244,7 @@ impl <'a> Expr<'a> {
                     expr.make_clause_set(clause_set);
                 }
             }
-            _ => panic!("calling make_clause helper on non-normalized expr {:?}", self)
+            _ => error!("calling make_clause helper on non-normalized expr {:?}", self)
         }
     }
     /// adds the current expression to the clause
@@ -260,7 +260,7 @@ impl <'a> Expr<'a> {
                 if let Literal(name) = *inner.kind {
                     builder.insert(name, false);
                 } else {
-                    panic!("calling make_clause helper on non-normalized expr Not({:?})", inner)
+                    error!("calling make_clause helper on non-normalized expr Not({:?})", inner)
                 }
             }
             Or(exprs) => {
@@ -268,7 +268,7 @@ impl <'a> Expr<'a> {
                     expr.make_clause(builder);
                 }
             }
-            _ => panic!("calling make_clause helper on non-normalized expr {:?}", self)
+            _ => error!("calling make_clause helper on non-normalized expr {:?}", self)
         };
     }
 
