@@ -1,22 +1,23 @@
 use crate::ast::Expr;
 use crate::prover::{ClosedClauseSet, Clause};
+use crate::error::BoxedErrorTrait;
 
 /// search for a proof of `query` from `givens`
 #[allow(dead_code)]
-pub fn find_proof(givens: Vec<Expr<'_>>, goal: Expr<'_>) -> bool {
+pub fn find_proof(givens: Vec<Expr<'_>>, goal: Expr<'_>) -> Result<bool, BoxedErrorTrait> {
     let mut clause_set = ClosedClauseSet::new();
     // enter all the givens
     for expr in givens {
-        expr.into_clauses(&mut clause_set);
+        expr.into_clauses(&mut clause_set)?;
     }
     // we do proof by contradiction
     // negate the goal, and if we find a contradiction, that's a proof
     goal
         .negate()
-        .into_clauses(&mut clause_set);
+        .into_clauses(&mut clause_set)?;
     // println!("clause_set: {:#?}", clause_set);
     // search for the contradiction
-    clause_set.has_contradiction()
+    Ok( clause_set.has_contradiction() )
 }
 
 impl ClosedClauseSet<'_> {
