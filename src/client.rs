@@ -92,7 +92,7 @@ fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
             let why = err.to_string();
             let response = MessageBuilder::new()
                 .push_bold("Error with verify command\n")
-                .push(why.as_str())
+                .push_codeblock_safe(why.as_str(), None)
                 .build();
             msg.channel_id.say(&ctx.http, &response)?;
         }
