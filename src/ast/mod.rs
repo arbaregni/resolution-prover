@@ -355,6 +355,70 @@ mod tests {
         ]).into();
         assert_eq!(expr.normalize_negations(), normalized);
     }
+    #[test]
+    fn normalize_negations_7() {
+        let expr = ExprKind::Iff(
+            ExprKind::Xor(
+                ExprKind::Literal("a").into(),
+                ExprKind::Literal("b").into(),
+            ).into(),
+            ExprKind::Not(
+                ExprKind::Iff(
+                    ExprKind::Literal("a").into(),
+                    ExprKind::Literal("b").into(),
+                ).into(),
+            ).into(),
+        ).into();
+        let normalized = ExprKind::And(vec![
+            ExprKind::Or(vec![
+                ExprKind::And(vec![
+                    ExprKind::Or(vec![
+                        ExprKind::Not(ExprKind::Literal("a").into()).into(),
+                        ExprKind::Literal("b").into(),
+                    ]).into(),
+                    ExprKind::Or(vec![
+                        ExprKind::Literal("a").into(),
+                        ExprKind::Not(ExprKind::Literal("b").into()).into(),
+                    ]).into(),
+                ]).into(),
+                ExprKind::And(vec![
+                    ExprKind::Or(vec![
+                        ExprKind::Literal("a").into(),
+                        ExprKind::Literal("b").into(),
+                    ]).into(),
+                    ExprKind::Or(vec![
+                        ExprKind::Not(ExprKind::Literal("a").into()).into(),
+                        ExprKind::Not(ExprKind::Literal("b").into()).into(),
+                    ]).into(),
+                ]).into(),
+            ]).into(),
+            ExprKind::Or(vec![
+                ExprKind::And(vec![
+                    ExprKind::Or(vec![
+                        ExprKind::Literal("a").into(),
+                        ExprKind::Literal("b").into(),
+                    ]).into(),
+                    ExprKind::Or(vec![
+                        ExprKind::Not(ExprKind::Literal("a").into()).into(),
+                        ExprKind::Not(ExprKind::Literal("b").into()).into(),
+                    ]).into(),
+                ]).into(),
+                ExprKind::And(vec![
+                    ExprKind::Or(vec![
+                        ExprKind::Not(ExprKind::Literal("a").into()).into(),
+                        ExprKind::Literal("b").into(),
+                    ]).into(),
+                    ExprKind::Or(vec![
+                        ExprKind::Literal("a").into(),
+                        ExprKind::Not(ExprKind::Literal("b").into()).into(),
+                    ]).into(),
+                ]).into(),
+            ]).into()
+        ]).into();
+        let actual = expr.normalize_negations();
+        println!("{:#?}", actual);
+        assert_eq!(actual, normalized);
+    }
 
     #[test]
     fn to_clauses_0() {

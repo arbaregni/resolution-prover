@@ -74,17 +74,21 @@ impl <'a> Expr<'a> {
                     // `not (p iff q)` becomes `(p or q) and (~p or ~q)`
                     Iff(p, q) => {
                         let not_p = Not(p.clone()).into().normalize_negations();
+                        let p = p.normalize_negations();
                         let not_q = Not(q.clone()).into().normalize_negations();
+                        let q = q.normalize_negations();
                         And(vec![
                             Or(vec![p, q]).into(),
                             Or(vec![not_p, not_q]).into(),
                         ]).into()
                     }
                     // negation of exclusive or is a biconditional
-                    // `not (p xor q)` becomes `(p or ~q) and (p or ~q)`
+                    // `not (p xor q)` becomes `(~p or q) and (~p or q)`
                     Xor(p, q) => {
                         let not_p = Not(p.clone()).into().normalize_negations();
+                        let p = p.normalize_negations();
                         let not_q = Not(q.clone()).into().normalize_negations();
+                        let q = q.normalize_negations();
                         And(vec![
                             Or(vec![not_p, q]).into(),
                             Or(vec![p, not_q]).into(),
@@ -102,7 +106,9 @@ impl <'a> Expr<'a> {
             // convert `P iff Q` to `(~P or Q) and (P or ~Q)``
             Iff(p, q) => {
                 let not_p = Not(p.clone()).into().normalize_negations();
+                let p = p.clone().normalize_negations();
                 let not_q = Not(q.clone()).into().normalize_negations();
+                let q = q.normalize_negations();
                 And(vec![
                     Or(vec![not_p, q]).into(),
                     Or(vec![p, not_q]).into(),
@@ -111,7 +117,9 @@ impl <'a> Expr<'a> {
             // convert `P xor Q` to (P or Q) and (~P or ~Q)
             Xor(p, q) => {
                 let not_p = Not(p.clone()).into().normalize_negations();
+                let p = p.clone().normalize_negations();
                 let not_q = Not(q.clone()).into().normalize_negations();
+                let q = q.normalize_negations();
                 And(vec![
                     Or(vec![p, q]).into(),
                     Or(vec![not_p, not_q]).into(),
@@ -283,24 +291,24 @@ impl fmt::Debug for Expr<'_> {
             ExprKind::Not(inner) => write!(f, "Not({:?})", inner)?,
             ExprKind::If(cond, cons) => write!(f, "Implies({:?} => {:?})", cond, cons)?,
             ExprKind::Iff(p, q) => {
-                write!(f, "Iff[")?;
+                write!(f, "Iff(")?;
                 f.debug_list().entry(p).entry(q).finish()?;
-                write!(f, "]")?;
+                write!(f, ")")?;
             },
             ExprKind::Xor(p, q) => {
-                write!(f, "Xor[")?;
+                write!(f, "Xor(")?;
                 f.debug_list().entry(p).entry(q).finish()?;
-                write!(f, "]")?;
+                write!(f, ")")?;
             },
             ExprKind::Or(exprs) => {
-                write!(f, "Or[")?;
+                write!(f, "Or(")?;
                 f.debug_list().entries(exprs.clone()).finish()?;
-                write!(f, "]")?;
+                write!(f, ")")?;
             },
             ExprKind::And(exprs) => {
-                write!(f, "And[")?;
+                write!(f, "And(")?;
                 f.debug_list().entries(exprs.clone()).finish()?;
-                write!(f, "]")?;
+                write!(f, ")")?;
             },
         };
         Ok( () )

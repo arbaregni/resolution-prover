@@ -18,7 +18,8 @@ fn main() -> Result<(), ()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::prover::service_proof_request;
+    use crate::prover::{service_proof_request, ClosedClauseSet};
+    use crate::ast;
 
     #[test]
     fn simple_proof_0() {
@@ -86,6 +87,23 @@ mod tests {
         // king and not ace                               . negation of implication
         assert_eq!(success, true);
     }
+    #[test]
+    fn simple_proof_5() {
+        let givens = vec![];
+        let goal = "(a xor b) iff not (a iff b)";
+        /*
+        let g = ast::parse(goal).expect("should parse");
+        let not_g = g.negate().normalize_negations().distribute_ors_inward();
+        let mut clause_set = ClosedClauseSet::new();
+        not_g.make_clause_set(&mut clause_set);
+        println!("before: {:#?}", clause_set);
+        let _ = clause_set.has_contradiction();
+        println!("================\nafter: {:#?}\n================", clause_set);
+         */
+        let success = service_proof_request(givens.as_slice(), goal).expect("should not happen");
+        assert_eq!(success, true);
+    }
+
     #[test]
     fn medium_proof_0() {
         let givens = vec![

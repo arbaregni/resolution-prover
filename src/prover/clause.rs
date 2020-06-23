@@ -111,6 +111,7 @@ impl <'a> Clause<'a> {
     ///       and we don't know anything about q. This gives us:
     ///     `{p, r}` (p is true OR r is true)
     pub fn resolve(&self, other: &Clause<'a>) -> Clause<'a> {
+        // we know at least one term will conflict, otherwise the new clause could have everything in both
         let capacity = self.terms.len() + other.terms.len() - 1;
         let mut resolvant_terms = Vec::with_capacity(capacity);
         let mut left_iter = self.terms.iter().peekable();
@@ -153,7 +154,9 @@ impl <'a> Clause<'a> {
                 (None, None) => { break; }
             }
         }
-        Clause { terms: resolvant_terms }
+        let resolvant =  Clause { terms: resolvant_terms };
+        println!("{:?} res. {:?} = {:?}", self, other, resolvant);
+        resolvant
     }
     /// Returns true if this is the empty clause, i.e falso
     #[allow(dead_code)]
