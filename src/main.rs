@@ -18,8 +18,7 @@ fn main() -> Result<(), ()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::prover::{service_proof_request, ClosedClauseSet};
-    use crate::ast;
+    use crate::prover::{service_proof_request};
 
     #[test]
     fn simple_proof_0() {

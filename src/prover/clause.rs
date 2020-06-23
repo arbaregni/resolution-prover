@@ -154,9 +154,7 @@ impl <'a> Clause<'a> {
                 (None, None) => { break; }
             }
         }
-        let resolvant =  Clause { terms: resolvant_terms };
-        println!("{:?} res. {:?} = {:?}", self, other, resolvant);
-        resolvant
+        Clause { terms: resolvant_terms }
     }
     /// Returns true if this is the empty clause, i.e falso
     #[allow(dead_code)]

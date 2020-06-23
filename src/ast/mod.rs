@@ -415,9 +415,7 @@ mod tests {
                 ]).into(),
             ]).into()
         ]).into();
-        let actual = expr.normalize_negations();
-        println!("{:#?}", actual);
-        assert_eq!(actual, normalized);
+        assert_eq!(expr.normalize_negations(), normalized);
     }
 
     #[test]
