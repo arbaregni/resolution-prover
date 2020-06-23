@@ -10,10 +10,11 @@ use std::{io, fs};
 use std::io::Read;
 use serde::Deserialize;
 use serenity::framework::StandardFramework;
-use crate::prover;
+use crate::{prover, ast};
 use serenity::utils::MessageBuilder;
 use serenity::framework::standard::{HelpOptions, CommandGroup, help_commands};
 use std::collections::HashSet;
+use crate::prover::ClosedClauseSet;
 
 const CONFIG_FILE_PATH: &'static str = "config.toml";
 
@@ -45,7 +46,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(about, verify)]
+#[commands(about, verify, clauses)]
 struct General;
 
 #[help]
@@ -99,7 +100,27 @@ fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     }
     Ok( () )
 }
-
+#[command]
+#[description("converts an expression to clausal normal form")]
+fn clauses(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
+    match ast::parse(args.message()) {
+        Ok(expr) => {
+            let mut clause_set = ClosedClauseSet::new();
+            expr.into_clauses(&mut clause_set);
+            let content = format!("{:#?}", clause_set.clauses);
+            msg.channel_id.say(&ctx.http, &content)?;
+        }
+        Err(err) => {
+            let why = err.to_string();
+            let content = MessageBuilder::new()
+                .push_bold("Error with clauses command\n")
+                .push_codeblock_safe(why.as_str(), None)
+                .build();
+            msg.channel_id.say(&ctx.http, &content)?;
+        }
+    }
+    Ok( () )
+}
 pub fn start() -> Result<(), Box<(dyn std::error::Error + 'static)>> {
     let config = Config::load()?;
     let mut client = Client::new(config.token(), Handler)?;
