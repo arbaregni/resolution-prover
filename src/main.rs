@@ -1,4 +1,6 @@
 #[macro_use]
+mod error;
+#[macro_use]
 mod prover;
 mod ast;
 mod client;
