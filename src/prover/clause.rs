@@ -209,9 +209,14 @@ impl <'a> ClosedClauseSet<'a> {
         let clause: &Clause = self.clauses.get_index(idx).expect("missing clause");
         for (name, truth_value) in clause.terms.iter() {
             // add the name, and truth value to the term map
-            self.term_map.entry((*name, *truth_value))
-                .or_insert(Vec::with_capacity(1))
-                .push(clause_id);
+            let cache = self.term_map
+                .entry((*name, *truth_value))
+                .or_insert(Vec::with_capacity(1));
+            // this clause has that (name, truth_value)
+            cache.push(clause_id);
+            // since we expect to call this on ever higher indices, it should be sorted
+            // thus, this removes all the duplicates
+            cache.dedup();
             // make sure the negation also exists
             self.term_map.entry((*name, !*truth_value))
                 .or_insert(Vec::new());
