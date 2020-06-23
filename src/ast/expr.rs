@@ -247,8 +247,7 @@ impl <'a> Expr<'a> {
                 }
             }
             _ => {
-                error!("calling make_clause helper on non-normalized expr {:?}", self);
-                return internal_error!();
+                return internal_error!("calling make_clause helper on non-normalized expr {:?}", self);
             }
         }
         Ok( () )
@@ -266,8 +265,7 @@ impl <'a> Expr<'a> {
                 if let Literal(name) = *inner.kind {
                     builder.insert(name, false);
                 } else {
-                    error!("calling make_clause helper on non-normalized expr Not({:?})", inner);
-                    return internal_error!();
+                    return internal_error!("calling make_clause helper on non-normalized expr Not({:?})", inner);
                 }
             }
             Or(exprs) => {
@@ -276,8 +274,7 @@ impl <'a> Expr<'a> {
                 }
             }
             _ => {
-                error!("calling make_clause helper on non-normalized expr {:?}", self);
-                return internal_error!();
+                return internal_error!("calling make_clause helper on non-normalized expr {:?}", self);
             }
         };
         Ok( () )
