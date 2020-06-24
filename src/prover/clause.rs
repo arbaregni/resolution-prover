@@ -157,14 +157,12 @@ impl <'a> Clause<'a> {
         Clause { terms: resolvant_terms }
     }
     /// Returns true if this is the empty clause, i.e falso
-    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.terms.is_empty()
     }
 }
 
 impl <'a> ClosedClauseSet<'a> {
-    #[allow(dead_code)]
     pub fn new() -> ClosedClauseSet<'a> {
         ClosedClauseSet {
             clauses: IndexSet::new(),
@@ -222,7 +220,6 @@ impl <'a> ClosedClauseSet<'a> {
         // println!("integrated new clause, clauses: {:#?}", self.clauses);
         clause_id
     }
-    #[allow(dead_code)]
     pub fn get<'s>(&'s self, id: ClauseId) -> &'s Clause<'a> {
         self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
     }

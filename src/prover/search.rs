@@ -3,7 +3,6 @@ use crate::prover::{ClosedClauseSet, Clause};
 use crate::error::BoxedErrorTrait;
 
 /// search for a proof of `query` from `givens`
-#[allow(dead_code)]
 pub fn find_proof(givens: Vec<Expr<'_>>, goal: Expr<'_>) -> Result<bool, BoxedErrorTrait> {
     let mut clause_set = ClosedClauseSet::new();
     // enter all the givens

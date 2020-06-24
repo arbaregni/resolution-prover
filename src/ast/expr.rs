@@ -12,7 +12,6 @@ pub struct Expr<'a> {
 }
 /// Represents what type of expression it is, and any associated data
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[allow(dead_code)]
 pub enum ExprKind<'a> {
     Literal(&'a str),
     Not(Expr<'a>),
@@ -24,7 +23,6 @@ pub enum ExprKind<'a> {
 }
 
 impl <'a> ExprKind<'a> {
-    #[allow(dead_code)]
     pub fn into(self) -> Expr<'a> {
         Expr { kind: Box::new(self) }
     }
@@ -32,7 +30,6 @@ impl <'a> ExprKind<'a> {
 
 impl <'a> Expr<'a> {
     /// Return the negation of this expression
-    #[allow(dead_code)]
     pub fn negate(self) -> Expr<'a> {
         ExprKind::Not(self).into()
     }
@@ -41,7 +38,6 @@ impl <'a> Expr<'a> {
     /// flattens all nested `And`s and `Or`s
     /// and move all `Not`s to immediately before atoms
     /// by applying the de morgan's and double negation elim.
-    #[allow(dead_code)]
     pub fn normalize_negations(self) -> Expr<'a> {
         use ExprKind::*;
         match *self.kind {
@@ -167,7 +163,6 @@ impl <'a> Expr<'a> {
     /// Distribute all of the ors inward as much as possible,
     /// i.e. `p + q + rs` becomes `(p + q + r)(p + q + s)`
     /// removes redundant `Or`s and `And`s
-    #[allow(dead_code)]
     pub fn distribute_ors_inward(self) -> Expr<'a> {
         // println!("distributing ors inward on {:#?}", self);
         use ExprKind::*;
@@ -236,7 +231,6 @@ impl <'a> Expr<'a> {
     ///  - if any expr kind other than `Or`, `And`, `Not`, and `Literal` are present
     ///  - if `Not` surround anything but a `Literal`
     ///  - if `Or`s surround any `And`s
-    #[allow(dead_code)]
     pub fn make_clause_set(self, clause_set: &mut ClosedClauseSet<'a>) -> Result<(), BoxedErrorTrait>{
         // println!("making into a clause set: {:#?}", self);
         use ExprKind::*;
@@ -265,7 +259,6 @@ impl <'a> Expr<'a> {
     }
     /// adds the current expression to the clause
     /// panicking if it can not be done (i.e. it was an `And` or `If`)
-    #[allow(dead_code)]
     fn make_clause(self, builder: &mut ClauseBuilder<'a>) -> Result<(), BoxedErrorTrait> {
         use ExprKind::*;
         match *self.kind {
@@ -293,7 +286,6 @@ impl <'a> Expr<'a> {
 
     /// Convert an expression to clausal normal form,
     /// inserting all new clauses into the clause set
-    #[allow(dead_code)]
     pub fn into_clauses(self, clause_set: &mut ClosedClauseSet<'a>) -> Result<(), BoxedErrorTrait> {
         // println!("converting: {:?}", self);
         self

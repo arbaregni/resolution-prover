@@ -1,7 +1,6 @@
 mod expr;
 pub use expr::*;
 
-#[allow(dead_code)]
 mod parse;
 pub use parse::*;
 
@@ -448,7 +447,7 @@ mod tests {
         let expr = ast::parse("((a => b) and (b => c)) => (a => c)").expect("should not fail");
 
         let mut clause_set  = ClosedClauseSet::new();
-        expr.into_clauses(&mut clause_set);
+        expr.into_clauses(&mut clause_set).expect("should not error");
 
         assert_eq!(clause_set.clauses.len(), 0);
     }
