@@ -10,6 +10,7 @@ pub use parse::*;
 mod tests {
     use crate::ast::{ExprKind, parse};
     use crate::prover::ClosedClauseSet;
+    use crate::ast;
 
     #[test]
     fn parse_simple_0() {
@@ -441,6 +442,14 @@ mod tests {
         assert!(clause_set.clauses.contains( &clause!(day, war) ));
         assert!(clause_set.clauses.contains( &clause!(night, love) ));
         assert!(clause_set.clauses.contains( &clause!(night, war) ));
+    }
+    #[test]
+    fn to_clauses_1() {
+        let expr = ast::parse("((a => b) and (b => c)) => (a => c)").expect("should not fail");
 
+        let mut clause_set  = ClosedClauseSet::new();
+        expr.into_clauses(&mut clause_set);
+
+        assert_eq!(clause_set.clauses.len(), 0);
     }
 }
