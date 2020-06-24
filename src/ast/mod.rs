@@ -435,7 +435,7 @@ mod tests {
         // (day or (love and war)) and (night or (love and war))
         // (day or love) and (day or war) and (night or love) and (night or war)
         let mut clause_set  = ClosedClauseSet::new();
-        expr.into_clauses(&mut clause_set);
+        expr.into_clauses(&mut clause_set).expect("should not fail");
 
         assert_eq!(clause_set.clauses.len(), 4);
         assert!(clause_set.clauses.contains( &clause!(day, love) ));

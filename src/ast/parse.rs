@@ -1,23 +1,26 @@
 use pest::Parser;
 use pest::iterators::{Pair, Pairs};
 use pest::error::{Error, ErrorVariant, InputLocation};
-
 use pest_derive::*;
+
 use crate::ast::{Expr, ExprKind};
+use crate::error::BoxedErrorTrait;
+
 
 #[derive(Parser)]
 #[grammar = "../grammar.pest"]
 struct Grammar;
 
-pub fn parse(source: &str) -> Result<Expr<'_>, Error<Rule>> {
+pub fn parse(source: &str) -> Result<Expr<'_>, BoxedErrorTrait> {
     // pest (essentially) tokenizes it for us,
     // all we have to do is deal with operator precedence
     // and converting into Expr structs
     let pairs = Grammar::parse(Rule::source, source).map_err(|e| explain_reserved(source, e))?;
-    parse_expr(pairs)
+    let expr = parse_expr(pairs)?;
+    Ok(expr)
 }
 
-fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, Error<Rule>> {
+fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
     let mut operator = None; // we don't have an operator yet
     let mut terms = vec![];
     for pair in pairs {
@@ -34,13 +37,13 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, Error<Rule>> {
                     Some(old_operator)
                         if old_operator.as_rule() == Rule::implies
                         || old_operator.as_rule() != new_operator.as_rule() => {
-                        let variant = ErrorVariant::CustomError {
+                        let variant = ErrorVariant::<Rule>::CustomError {
                             message: format!("unexpected {:?} after {:?}; try adding parenthesis to disambiguate",
                                               new_operator.as_rule(), old_operator.as_rule()
                             )
                         };
                         let error = Error::new_from_span(variant, new_operator.as_span());
-                        return Err(error);
+                        return Err(Box::new(error));
                     }
                     Some(_) => {}
                 }
@@ -66,10 +69,11 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, Error<Rule>> {
         }
         Some((Rule::bicond, p)) => {
             if terms.len() != 2 {
-                let variant = ErrorVariant::CustomError {
+                let variant = ErrorVariant::<Rule>::CustomError {
                     message: "biconditional chains are not supported yet".to_string()
                 };
-                return Err(Error::new_from_span(variant, p.as_span()));
+                let error = Error::new_from_span(variant, p.as_span());
+                return Err(Box::new(error));
             }
             let last = terms.pop().unwrap();
             let first = terms.pop().unwrap();
@@ -77,10 +81,11 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, Error<Rule>> {
         }
         Some((Rule::xor, p)) => {
             if terms.len() != 2 {
-                let variant = ErrorVariant::CustomError {
+                let variant = ErrorVariant::<Rule>::CustomError {
                     message: "exclusive or chains are not supported yet".to_string()
                 };
-                return Err(Error::new_from_span(variant, p.as_span()));
+                let error = Error::new_from_span(variant, p.as_span());
+                return Err(Box::new(error));
             }
             let last = terms.pop().unwrap();
             let first = terms.pop().unwrap();
@@ -93,13 +98,13 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, Error<Rule>> {
             ExprKind::Or(terms).into()
         }
         Some((rule, _)) => {
-            panic!("`{:?}` is not a valid operator", rule)
+            return internal_error!("`{:?}` is not a valid operator", rule);
         }
     };
     Ok(expr)
 }
 
-fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, Error<Rule>> {
+fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
     let expr = match pair.as_rule() {
         Rule::literal => {
             ExprKind::Literal(pair.as_str()).into()
@@ -113,11 +118,13 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, Error<Rule>> {
         }
         // we're not expecting operators or EOI here
         Rule::operator | Rule::or | Rule::and | Rule::implies | Rule::xor | Rule::bicond | Rule::EOI => {
-            panic!("unexpected operator or EOI {} in parse_term", pair.as_str())
+            return internal_error!("unexpected operator or EOI {} in parse_term", pair.as_str());
         }
         // silent rules produce nothing
           Rule::WHITESPACE | Rule::reserved
-        | Rule::expr | Rule::source | Rule::term | Rule::not => panic!("rule {:?} should produce nothing", pair.as_rule())
+        | Rule::expr | Rule::source | Rule::term | Rule::not => {
+              return internal_error!("rule {:?} should produce nothing", pair.as_rule());
+          }
     };
     Ok(expr)
 }

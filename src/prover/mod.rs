@@ -6,17 +6,19 @@ pub use clause::*;
 mod search;
 pub use search::*;
 use crate::ast;
+use crate::error::BoxedErrorTrait;
 
 /// Parse and the givens and the goal,
 /// search for a proof, returning `Some(true)` on success, `Some(false)` otherwise
 /// returns `None` upon error
-pub fn service_proof_request(givens: &[&str], goal: &str) -> Result<bool, Box<(dyn std::error::Error + 'static)>> {
+pub fn service_proof_request(givens: &[&str], goal: &str) -> Result<bool, BoxedErrorTrait> {
     let givens = givens
         .iter()
         .map(|&source| ast::parse(source))
         .collect::<Result<Vec<_>, _>>()?;
     let goal = ast::parse(goal)?;
-    Ok( find_proof(givens, goal) )
+    let success = find_proof(givens, goal)?;
+    Ok( success )
 }
 
 #[cfg(test)]
@@ -190,7 +192,8 @@ mod tests {
         ];
         let goal = ExprKind::Literal("will-fall").into();
 
-        assert_eq!(find_proof(givens, goal), true);
+        let success = find_proof(givens, goal).expect("should not fail");
+        assert_eq!(success, true);
     }
     #[test]
     fn provability_simple_1() {
@@ -209,7 +212,8 @@ mod tests {
             ExprKind::Literal("will-fall").into(),
         ).into();
 
-        assert_eq!(find_proof(givens, goal), true);
+        let success = find_proof(givens, goal).expect("should not fail");
+        assert_eq!(success, true);
     }
     #[test]
     fn provability_simple_2() {
@@ -225,7 +229,8 @@ mod tests {
         ];
         let goal = ExprKind::Literal("will-fall").into();
 
-        assert_eq!(find_proof(givens, goal), false); // we can't prove definitely that you will fall
+        let success = find_proof(givens, goal).expect("should not fail");
+        assert_eq!(success, false); // we can't prove definitely that you will fall
     }
     #[test]
     fn provability_simple_3() {
@@ -247,7 +252,8 @@ mod tests {
         // we should NOT be able to prove an arbitrary formula
         let goal = ExprKind::Literal("zeta").into();
 
-        assert_eq!(find_proof(givens, goal), false);
+        let success = find_proof(givens, goal).expect("should not error");
+        assert_eq!(success, false);
     }
 
     #[test]
@@ -320,8 +326,8 @@ mod tests {
             ExprKind::Literal("clear-skies").into(),
             ExprKind::Literal("will-fall").into()
         ]).into();
-
-        assert_eq!(find_proof(givens, goal), true);
+        let success = find_proof(givens, goal).expect("should not error");
+        assert_eq!(success, true);
     }
 
 }

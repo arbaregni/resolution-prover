@@ -15,6 +15,7 @@ use serenity::utils::MessageBuilder;
 use serenity::framework::standard::{HelpOptions, CommandGroup, help_commands};
 use std::collections::HashSet;
 use crate::prover::ClosedClauseSet;
+use crate::error::BoxedErrorTrait;
 
 const CONFIG_FILE_PATH: &'static str = "config.toml";
 
@@ -103,10 +104,13 @@ fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
 #[command]
 #[description("converts an expression to clausal normal form")]
 fn clauses(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
-    match ast::parse(args.message()) {
-        Ok(expr) => {
-            let mut clause_set = ClosedClauseSet::new();
-            expr.into_clauses(&mut clause_set);
+    let mut clause_set = ClosedClauseSet::new();
+    let result = ast::parse(args.message())
+        .and_then(|expr| {
+            expr.into_clauses(&mut clause_set)
+        });
+    match result {
+        Ok(_) => {
             let content = format!("{:#?}", clause_set.clauses);
             msg.channel_id.say(&ctx.http, &content)?;
         }
@@ -121,7 +125,7 @@ fn clauses(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     }
     Ok( () )
 }
-pub fn start() -> Result<(), Box<(dyn std::error::Error + 'static)>> {
+pub fn start() -> Result<(), BoxedErrorTrait> {
     let config = Config::load()?;
     let mut client = Client::new(config.token(), Handler)?;
     client.with_framework(StandardFramework::new()
