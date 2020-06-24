@@ -116,8 +116,47 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
         Rule::parenthetical => {
             parse_expr(pair.into_inner())?
         }
-        // we're not expecting operators or EOI here
-        Rule::operator | Rule::or | Rule::and | Rule::implies | Rule::xor | Rule::bicond | Rule::EOI => {
+        Rule::pred => {
+            let mut iter = pair.into_inner();
+            let name = if let Some(literal) = iter.next() {
+                literal.as_str()
+            } else {
+                return internal_error!("predicate is missing a name");
+            };
+            let args = iter
+                .map(|p| parse_expr(p.into_inner()))
+                .collect::<Result<Vec<_>, _>>()?;
+            ExprKind::Predicate(name, args).into()
+        }
+        Rule::quantified => {
+            let mut iter = pair.into_inner();
+            let quantifier = if let Some(quantifier) = iter.next() {
+                quantifier.as_rule()
+            } else {
+                return internal_error!("quantified missing its quantifier")
+            };
+            let variable = if let Some(variable) = iter.next() {
+                variable.as_str()
+            } else {
+                return internal_error!("quantified missing its variable")
+            };
+            let expr = if let Some(inner) = iter.next() {
+                parse_expr(inner.into_inner())?
+            } else {
+                return internal_error!("quantified missing its inner");
+            };
+            match quantifier {
+                Rule::univ => {
+                    ExprKind::Universal(variable, expr).into()
+                },
+                Rule::exis => {
+                    ExprKind::Existential(variable, expr).into()
+                },
+                _ => return internal_error!("unexpected quantifier {:?}", quantifier)
+            }
+        }
+        // we're not expecting operators or arguments or EOI here
+        Rule::arg | Rule::operator | Rule::or | Rule::and | Rule::implies | Rule::xor | Rule::bicond | Rule::EOI => {
             return internal_error!("unexpected operator or EOI {} in parse_term", pair.as_str());
         }
         // silent rules produce nothing
