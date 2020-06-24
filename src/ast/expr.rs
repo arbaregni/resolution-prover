@@ -1,7 +1,6 @@
 use map_in_place::MapVecInPlace;
-use itertools::Itertools;
-use crate::prover::{ClosedClauseSet, ClauseBuilder};
 use std::fmt::Formatter;
+use crate::prover::{ClosedClauseSet, ClauseBuilder};
 use std::{fmt, iter};
 
 use crate::error::*;
@@ -173,20 +172,31 @@ impl <'a> Expr<'a> {
         // println!("distributing ors inward on {:#?}", self);
         use ExprKind::*;
         match *self.kind {
-            Or(mut or_terms) => {
-                // search for an `And` we can distribute over
-                let search_result = or_terms.iter()
-                    .find_position(|expr| {
-                        if let And(_) = *expr.kind {
-                            true
-                        } else {
-                            false
+            Or(mut old_terms) => {
+                // search for an `And` we can distribute over, and flatten the `or`s
+                let mut found = None;
+                let mut terms = Vec::with_capacity(old_terms.len());
+                while let Some(expr) = old_terms.pop() {
+                    match *expr.kind {
+                        And(_) => {
+                            found = Some(terms.len());
+                            terms.push(expr);
                         }
-                    });
-                if let Some((index, _)) = search_result {
+                        Or(sub_terms) => {
+                            // steal all those subterms for ourselves, adding them to the old_term vec so we can add them later
+                            for sub_expr in sub_terms {
+                                old_terms.push(sub_expr);
+                            }
+                        }
+                        _ => {
+                            terms.push(expr);
+                        }
+                    }
+                }
+                if let Some(index) = found {
                     // here we have found the `rs` expression (see doc example)
                     // take the And expression out
-                    let and_terms = match *or_terms.swap_remove(index).kind {
+                    let and_terms = match *terms.swap_remove(index).kind {
                         And(and_terms) => and_terms,
                         _ => unreachable!(),
                     };
@@ -196,7 +206,7 @@ impl <'a> Expr<'a> {
                         .into_iter()
                         .map(|term| {
                             // get the terms that we're or'ing inward, i.e. `p + q`
-                            let mut new_terms = or_terms.clone();
+                            let mut new_terms = terms.clone();
                             // add the terms from the conjunction, i.e. `r` or `s`
                             new_terms.push(term);
                             // now recursively distribute
@@ -205,8 +215,9 @@ impl <'a> Expr<'a> {
                         .collect::<Vec<_>>();
                     And(new_terms).into()
                 } else {
-                    // here we haven't found any ands to distribute into => all done!
-                    Or(or_terms).into()
+                    // here we haven't found any ands to distribute into
+                    // since we assume there aren't any nested `Or`s, our work is done
+                    Or(terms).into()
                 }
             },
             // simply recurse on all of our children
