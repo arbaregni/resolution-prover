@@ -1,30 +1,38 @@
 use map_in_place::MapVecInPlace;
 use std::fmt::Formatter;
 use crate::prover::{ClosedClauseSet, ClauseBuilder};
-use std::{fmt, iter};
+use std::{fmt, iter, convert};
 
 use crate::error::*;
+use crate::ast::{LiteralExpr};
 
-/// A high level expression
+/// A high level expression of first order terms
 #[derive(PartialEq, Eq, Clone)]
 pub struct Expr<'a> {
     kind: Box<ExprKind<'a>>
 }
-/// Represents what type of expression it is, and any associated data
+/// Represents type of expression and any associated data
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExprKind<'a> {
-    Literal(&'a str),
+    Literal(LiteralExpr<'a>),
     Not(Expr<'a>),
     If(Expr<'a>, Expr<'a>),
     Iff(Expr<'a>, Expr<'a>),
     Xor(Expr<'a>, Expr<'a>),
     Or(Vec<Expr<'a>>),
     And(Vec<Expr<'a>>),
+    Universal(&'a str, Expr<'a>),
+    Existential(&'a str, Expr<'a>),
 }
 
-impl <'a> ExprKind<'a> {
-    pub fn into(self) -> Expr<'a> {
-        Expr { kind: Box::new(self) }
+impl <'a> convert::From<LiteralExpr<'a>> for Expr<'a> {
+    fn from(lit: LiteralExpr<'_>) -> Self {
+        ExprKind::Literal(lit).into()
+    }
+}
+impl <'a> convert::From<ExprKind<'a>> for Expr<'a> {
+    fn from(kind: ExprKind<'a>) -> Self {
+        Expr { kind: Box::new(kind), }
     }
 }
 
@@ -91,7 +99,18 @@ impl <'a> Expr<'a> {
                             Or(vec![p, not_q]).into(),
                         ]).into()
                     },
-                    Literal(_) => Not(negated).into(),
+                    // `not forall x: P(x)` becomes `exists x: not P(x)`
+                    Universal(var, expr) => {
+                        let not_expr = Not(expr).into().normalize_negations();
+                        Existential(var, not_expr).into()
+                    }
+                    // `not exists x: P(x)` becomes `forall x: not P(x)`
+                    Existential(var, expr) => {
+                        let not_expr = Not(expr).into().normalize_negations();
+                        Universal(var, not_expr).into()
+                    }
+                    // no further simplifications
+                    Literal(_) | Predicate(_, _) => Not(negated).into(),
                 }
             }
             // convert `P implies Q` to `not P or Q`
@@ -156,7 +175,10 @@ impl <'a> Expr<'a> {
                     .collect();
                 And(subexprs).into()
             }
-            Literal(_) => self
+            // recurse on our sub expressions
+            Universal(var, expr) => Universal(var, expr.normalize_negations()).into(),
+            Existential(var, expr) => Existential(var, expr.normalize_negations()).into(),
+            Literal(_) | Predicate(_, _) => self,
         }
     }
 
@@ -218,10 +240,12 @@ impl <'a> Expr<'a> {
             // simply recurse on all of our children
             And(exprs) => And(exprs.map_in_place(Expr::distribute_ors_inward)).into(),
             If(cond, cons) => If(cond.distribute_ors_inward(), cons.distribute_ors_inward()).into(),
+            Universal(var, expr) => Universal(var, expr.distribute_ors_inward()).into(),
+            Existential(var, expr) => Existential(var, expr.distribute_ors_inward()).into(),
             Iff(p, q) => Iff(p.distribute_ors_inward(), q.distribute_ors_inward()).into(),
             Xor(p, q) => Xor(p.distribute_ors_inward(), q.distribute_ors_inward()).into(),
             Not(inner) => Not(inner.distribute_ors_inward()).into(),
-            Literal(_) => self,
+            Literal(_) | Predicate(_, _) => self,
         }
     }
 
@@ -322,6 +346,17 @@ impl fmt::Debug for Expr<'_> {
                 f.debug_list().entries(exprs.clone()).finish()?;
                 write!(f, ")")?;
             },
+            ExprKind::Predicate(name, subexprs) => {
+                write!(f, "Predicate {}(", name)?;
+                f.debug_list().entries(subexprs.clone()).finish()?;
+                write!(f, ")")?;
+            }
+            ExprKind::Universal(var, expr) => {
+                write!(f, "Universal({}): {:?}", var, expr)?;
+            }
+            ExprKind::Existential(var, expr) => {
+                write!(f, "Existential({}): {:?}", var, expr)?;
+            }
         };
         Ok( () )
     }

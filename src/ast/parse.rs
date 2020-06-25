@@ -156,7 +156,8 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
             }
         }
         // we're not expecting operators or arguments or EOI here
-        Rule::arg | Rule::operator | Rule::or | Rule::and | Rule::implies | Rule::xor | Rule::bicond | Rule::EOI => {
+         Rule::arg | Rule::univ | Rule::exis | Rule::operator
+        | Rule::or | Rule::and | Rule::implies | Rule::xor | Rule::bicond | Rule::EOI => {
             return internal_error!("unexpected operator or EOI {} in parse_term", pair.as_str());
         }
         // silent rules produce nothing
