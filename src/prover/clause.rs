@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 use std::cmp::Ordering;
 
+use crate::ast::LiteralExpr;
+
 /// A recursive macro that builds a clause from terms
 #[allow(unused_macros)]
 macro_rules! clause_builder {
@@ -42,11 +44,11 @@ macro_rules! clause {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Clause<'a> {
     /// sorted vector of `(variable_name, truth_value)`, no duplicate variable names
-    terms: Vec<(&'a str, bool)>,
+    terms: Vec<(LiteralExpr<'a>, bool)>,
 }
 
 pub struct ClauseBuilder<'a> {
-    terms: BTreeMap<&'a str, bool>,
+    terms: BTreeMap<LiteralExpr<'a>, bool>,
     is_tautology: bool,
 }
 
@@ -61,7 +63,7 @@ pub struct ClosedClauseSet<'a> {
     pub clauses: IndexSet<Clause<'a>>,
     /// maps `(variable_name, truth_value)` to vectors of clauses,
     /// which contain that `variable_name` with that `truth_value`
-    term_map: HashMap<(&'a str, bool), Vec<ClauseId>>
+    term_map: HashMap<(LiteralExpr<'a>, bool), Vec<ClauseId>>
 }
 
 impl <'a> ClauseBuilder<'a> {
@@ -72,17 +74,17 @@ impl <'a> ClauseBuilder<'a> {
             is_tautology: false
         }
     }
-    /// Set a variable name to a specific truth-value, returning `self`
+    /// Set a variable name to a specific truth-value, returning `self`, used in macros
     #[allow(dead_code)]
     pub fn set(mut self, var_name: &'a str, truth_value: bool) -> ClauseBuilder {
-        self.insert(var_name, truth_value);
+        self.insert(LiteralExpr::atom(var_name), truth_value);
         self
     }
     /// Inserts a specific variable name with its truth-value,
     /// returns `true` if a tautology is created
-    pub fn insert(&mut self, var_name: &'a str, truth_value: bool) {
+    pub fn insert(&mut self, literal: LiteralExpr<'a>, truth_value: bool) {
         if self.is_tautology { return; }
-        match self.terms.entry(var_name) {
+        match self.terms.entry(literal) {
             Entry::Vacant(entry) => {
                 entry.insert(truth_value);
             },
@@ -123,19 +125,19 @@ impl <'a> Clause<'a> {
                     Ordering::Less => {
                         // process the left side
                         left_iter.next();
-                        resolvant_terms.push( (*lname, *ltruth));
+                        resolvant_terms.push( (lname.clone(), *ltruth));
                     },
                     Ordering::Greater => {
                         // process the right side
                         right_iter.next();
-                        resolvant_terms.push( (*rname, *rtruth));
+                        resolvant_terms.push( (rname.clone(), *rtruth));
                     },
                     Ordering::Equal => {
                         // present the same variable, process both
                         left_iter.next(); right_iter.next();
                         if ltruth == rtruth {
                             // terms are the same, it's just a redundancy
-                            resolvant_terms.push( (*lname, *rtruth));
+                            resolvant_terms.push( (lname.clone(), *rtruth));
                         } else {
                             // these are the conflicting terms, and we do not include them
                         }
@@ -144,12 +146,12 @@ impl <'a> Clause<'a> {
                 // there is only the left to process
                 ( Some((name, truth)), None ) => {
                     left_iter.next();
-                    resolvant_terms.push((*name, *truth));
+                    resolvant_terms.push((name.clone(), *truth));
                 }
                 // there is only the right to process
                 ( None, Some((name, truth)) ) => {
                     right_iter.next();
-                    resolvant_terms.push((*name, *truth));
+                    resolvant_terms.push((name.clone(), *truth));
                 }
                 (None, None) => { break; }
             }
@@ -181,7 +183,7 @@ impl <'a> ClosedClauseSet<'a> {
         // iterate over the terms in `clause`
         for (name, truth_value) in clause.terms.iter() {
             // increment the count of each clause with the same name, but opposite truth_value
-            for clause_id in self.term_map[&(*name, !*truth_value)].iter() {
+            for clause_id in self.term_map[&(name.clone(), !*truth_value)].iter() {
                 counts[clause_id.0] += 1;
             }
         }
@@ -206,7 +208,7 @@ impl <'a> ClosedClauseSet<'a> {
         for (name, truth_value) in clause.terms.iter() {
             // add the name, and truth value to the term map
             let cache = self.term_map
-                .entry((*name, *truth_value))
+                .entry((name.clone(), *truth_value))
                 .or_insert(Vec::with_capacity(1));
             // this clause has that (name, truth_value)
             cache.push(clause_id);
@@ -214,7 +216,7 @@ impl <'a> ClosedClauseSet<'a> {
             // thus, this removes all the duplicates
             cache.dedup();
             // make sure the negation also exists
-            self.term_map.entry((*name, !*truth_value))
+            self.term_map.entry((name.clone(), !*truth_value))
                 .or_insert(Vec::new());
         }
         // println!("integrated new clause, clauses: {:#?}", self.clauses);
@@ -236,9 +238,9 @@ impl fmt::Debug for Clause<'_> {
             }
             first = false;
             if *truth_value {
-                write!(f, "{}", term)?;
+                write!(f, "{:?}", term)?;
             } else {
-                write!(f, "~{}", term)?;
+                write!(f, "~{:?}", term)?;
             }
         }
         write!(f, "}}")?;

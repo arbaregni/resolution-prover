@@ -3,7 +3,7 @@ use pest::iterators::{Pair, Pairs};
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest_derive::*;
 
-use crate::ast::{Expr, ExprKind};
+use crate::ast::{Expr, ExprKind, LiteralExpr};
 use crate::error::BoxedErrorTrait;
 
 
@@ -107,7 +107,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
 fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
     let expr = match pair.as_rule() {
         Rule::literal => {
-            ExprKind::Literal(pair.as_str()).into()
+            LiteralExpr::atom(pair.as_str()).into()
         }
         Rule::negation => {
             let inner = parse_expr(pair.into_inner())?;
@@ -116,18 +116,7 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
         Rule::parenthetical => {
             parse_expr(pair.into_inner())?
         }
-        Rule::pred => {
-            let mut iter = pair.into_inner();
-            let name = if let Some(literal) = iter.next() {
-                literal.as_str()
-            } else {
-                return internal_error!("predicate is missing a name");
-            };
-            let args = iter
-                .map(|p| parse_expr(p.into_inner()))
-                .collect::<Result<Vec<_>, _>>()?;
-            ExprKind::Predicate(name, args).into()
-        }
+        Rule::pred => parse_predicate(pair.into_inner())?.into(),
         Rule::quantified => {
             let mut iter = pair.into_inner();
             let quantifier = if let Some(quantifier) = iter.next() {
@@ -167,6 +156,22 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
           }
     };
     Ok(expr)
+}
+
+/// parses a predicate expression
+fn parse_predicate(mut pairs: Pairs<Rule>) -> Result<LiteralExpr, BoxedErrorTrait> {
+    let name = if let Some(p) = pairs.next() {
+        p.as_str()
+    } else {
+        return internal_error!("predicate missing name");
+    };
+    let args = pairs
+        .map(|p| {
+            parse_predicate(p.into_inner())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let lit = LiteralExpr::predicate(name, args);
+    Ok(lit)
 }
 
 /// updates the error so that reserved words are mentioned in the error message

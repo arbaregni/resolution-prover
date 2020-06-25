@@ -1,7 +1,7 @@
 use map_in_place::MapVecInPlace;
 use std::fmt::Formatter;
 use crate::prover::{ClosedClauseSet, ClauseBuilder};
-use std::{fmt, iter, convert};
+use std::{fmt, iter};
 
 use crate::error::*;
 use crate::ast::{LiteralExpr};
@@ -24,15 +24,9 @@ pub enum ExprKind<'a> {
     Universal(&'a str, Expr<'a>),
     Existential(&'a str, Expr<'a>),
 }
-
-impl <'a> convert::From<LiteralExpr<'a>> for Expr<'a> {
-    fn from(lit: LiteralExpr<'_>) -> Self {
-        ExprKind::Literal(lit).into()
-    }
-}
-impl <'a> convert::From<ExprKind<'a>> for Expr<'a> {
-    fn from(kind: ExprKind<'a>) -> Self {
-        Expr { kind: Box::new(kind), }
+impl <'a> ExprKind<'a> {
+    pub fn into(self) -> Expr<'a> {
+        Expr { kind: Box::new(self), }
     }
 }
 
@@ -110,7 +104,7 @@ impl <'a> Expr<'a> {
                         Universal(var, not_expr).into()
                     }
                     // no further simplifications
-                    Literal(_) | Predicate(_, _) => Not(negated).into(),
+                    Literal(_) => Not(negated).into(),
                 }
             }
             // convert `P implies Q` to `not P or Q`
@@ -178,7 +172,7 @@ impl <'a> Expr<'a> {
             // recurse on our sub expressions
             Universal(var, expr) => Universal(var, expr.normalize_negations()).into(),
             Existential(var, expr) => Existential(var, expr.normalize_negations()).into(),
-            Literal(_) | Predicate(_, _) => self,
+            Literal(_) => self,
         }
     }
 
@@ -245,7 +239,7 @@ impl <'a> Expr<'a> {
             Iff(p, q) => Iff(p.distribute_ors_inward(), q.distribute_ors_inward()).into(),
             Xor(p, q) => Xor(p.distribute_ors_inward(), q.distribute_ors_inward()).into(),
             Not(inner) => Not(inner.distribute_ors_inward()).into(),
-            Literal(_) | Predicate(_, _) => self,
+            Literal(_) => self,
         }
     }
 
@@ -346,11 +340,6 @@ impl fmt::Debug for Expr<'_> {
                 f.debug_list().entries(exprs.clone()).finish()?;
                 write!(f, ")")?;
             },
-            ExprKind::Predicate(name, subexprs) => {
-                write!(f, "Predicate {}(", name)?;
-                f.debug_list().entries(subexprs.clone()).finish()?;
-                write!(f, ")")?;
-            }
             ExprKind::Universal(var, expr) => {
                 write!(f, "Universal({}): {:?}", var, expr)?;
             }

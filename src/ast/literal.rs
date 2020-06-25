@@ -1,8 +1,8 @@
-use std::fmt;
-use serde::export::Formatter;
+use std::{fmt};
+use crate::ast::{Expr, ExprKind};
 
 /// A literal predicate expression, with no logical connectives
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LiteralExpr<'a> {
     name: &'a str,
     args: Vec<LiteralExpr<'a>>,
@@ -15,18 +15,18 @@ impl <'a> LiteralExpr<'a> {
     pub fn predicate(name: &'a str, args: Vec<LiteralExpr<'a>>) -> LiteralExpr<'a> {
         LiteralExpr { name, args }
     }
+    pub fn into(self) -> Expr<'a> {
+        ExprKind::Literal(self).into()
+    }
 }
 
-impl fmt::Debug for LiteralExpr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+impl fmt::Debug for LiteralExpr<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.args.is_empty() {
             write!(f, "{}", self.name)?;
         } else {
-            write!(f, "{}(", self.name)?;
-            f.debug_list().entries(self.args.clone()).finish()?;
-            write!(f, ")")?;
+            f.debug_tuple(self.name).entries(self.args.clone()).finish()?;
         }
         Ok(())
     }
 }
-

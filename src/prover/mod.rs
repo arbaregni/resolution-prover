@@ -24,7 +24,7 @@ pub fn service_proof_request(givens: &[&str], goal: &str) -> Result<bool, BoxedE
 #[cfg(test)]
 mod tests {
     use crate::prover::{Clause, ClosedClauseSet, find_proof, ClauseBuilder};
-    use crate::ast::ExprKind;
+    use crate::ast::{ExprKind, LiteralExpr};
 
     #[test]
     fn clause_builder_0() {
@@ -181,16 +181,16 @@ mod tests {
     fn provability_simple_0() {
         let givens = vec![
             ExprKind::If(
-                ExprKind::Literal("it-rains").into(),
-                ExprKind::Literal("get-wet").into(),
+                LiteralExpr::atom("it-rains").into(),
+                LiteralExpr::atom("get-wet").into(),
             ).into(),
             ExprKind::If(
-                ExprKind::Literal("get-wet").into(),
-                ExprKind::Literal("will-fall").into(),
+                LiteralExpr::atom("get-wet").into(),
+                LiteralExpr::atom("will-fall").into(),
             ).into(),
-            ExprKind::Literal("it-rains").into(),
+            LiteralExpr::atom("it-rains").into(),
         ];
-        let goal = ExprKind::Literal("will-fall").into();
+        let goal = LiteralExpr::atom("will-fall").into();
 
         let success = find_proof(givens, goal).expect("should not fail");
         assert_eq!(success, true);
@@ -199,17 +199,17 @@ mod tests {
     fn provability_simple_1() {
         let givens = vec![
             ExprKind::If(
-                ExprKind::Literal("it-rains").into(),    // if it-rains, you will get wet
-                ExprKind::Literal("get-wet").into(),
+                LiteralExpr::atom("it-rains").into(),    // if it-rains, you will get wet
+                LiteralExpr::atom("get-wet").into(),
             ).into(),
             ExprKind::If(
-                ExprKind::Literal("get-wet").into(),    // if you get wet, you will fall
-                ExprKind::Literal("will-fall").into(),
+                LiteralExpr::atom("get-wet").into(),    // if you get wet, you will fall
+                LiteralExpr::atom("will-fall").into(),
             ).into(),
         ];
         let goal = ExprKind::If( // therefore, if it-rains, you will fall
-            ExprKind::Literal("it-rains").into(),
-            ExprKind::Literal("will-fall").into(),
+            LiteralExpr::atom("it-rains").into(),
+                                 LiteralExpr::atom("will-fall").into(),
         ).into();
 
         let success = find_proof(givens, goal).expect("should not fail");
@@ -219,15 +219,15 @@ mod tests {
     fn provability_simple_2() {
         let givens = vec![
             ExprKind::If(
-                ExprKind::Literal("it-rains").into(),    // if it-rains, you will get wet
-                ExprKind::Literal("get-wet").into(),
+                LiteralExpr::atom("it-rains").into(),    // if it-rains, you will get wet
+                LiteralExpr::atom("get-wet").into(),
             ).into(),
             ExprKind::If(
-                ExprKind::Literal("get-wet").into(),    // if you get wet, you will fall
-                ExprKind::Literal("will-fall").into(),
+                LiteralExpr::atom("get-wet").into(),    // if you get wet, you will fall
+                LiteralExpr::atom("will-fall").into(),
             ).into(),
         ];
-        let goal = ExprKind::Literal("will-fall").into();
+        let goal = LiteralExpr::atom("will-fall").into();
 
         let success = find_proof(givens, goal).expect("should not fail");
         assert_eq!(success, false); // we can't prove definitely that you will fall
@@ -236,21 +236,21 @@ mod tests {
     fn provability_simple_3() {
         let givens = vec![
             ExprKind::Or(vec![
-                ExprKind::Literal("p").into(),
+                LiteralExpr::atom("p").into(),
                 ExprKind::Not(
-                    ExprKind::Literal("q").into(),
+                    LiteralExpr::atom("q").into(),
                 ).into(),
              ]).into(),
             ExprKind::Or(vec![
-                ExprKind::Literal("q").into(),
+                LiteralExpr::atom("q").into(),
                 ExprKind::Not(
-                    ExprKind::Literal("p").into(),
+                    LiteralExpr::atom("p").into(),
                 ).into(),
             ]).into(),
         ];
         // this is a consistent set of givens
         // we should NOT be able to prove an arbitrary formula
-        let goal = ExprKind::Literal("zeta").into();
+        let goal = LiteralExpr::atom("zeta").into();
 
         let success = find_proof(givens, goal).expect("should not error");
         assert_eq!(success, false);
@@ -261,70 +261,70 @@ mod tests {
         let givens = vec![
             // if it rains, you will get wet
             ExprKind::If(
-                ExprKind::Literal("it-rains").into(),
-                ExprKind::Literal("get-wet").into(),
+                LiteralExpr::atom("it-rains").into(),
+                LiteralExpr::atom("get-wet").into(),
             ).into(),
             // if you get wet, you will fall
             ExprKind::If(
-                ExprKind::Literal("get-wet").into(),
-                ExprKind::Literal("will-fall").into(),
+                LiteralExpr::atom("get-wet").into(),
+                LiteralExpr::atom("will-fall").into(),
             ).into(),
             // if it lightnings, you will be scared
             ExprKind::If(
-                ExprKind::Literal("it-lightnings").into(),
-                ExprKind::Literal("will-be-scared").into(),
+                LiteralExpr::atom("it-lightnings").into(),
+                LiteralExpr::atom("will-be-scared").into(),
             ).into(),
             // if you're scared, you will fall
             ExprKind::If(
-                ExprKind::Literal("will-be-scared").into(),
-                ExprKind::Literal("will-fall").into(),
+                LiteralExpr::atom("will-be-scared").into(),
+                LiteralExpr::atom("will-fall").into(),
             ).into(),
             // if it hails or snows, you will be slippery
             ExprKind::If(
                 ExprKind::Or(vec![
-                    ExprKind::Literal("it-hails").into(),
-                    ExprKind::Literal("it-snows").into(),
+                    LiteralExpr::atom("it-hails").into(),
+                    LiteralExpr::atom("it-snows").into(),
                 ]).into(),
-                ExprKind::Literal("will-be-slippery").into(),
+                LiteralExpr::atom("will-be-slippery").into(),
             ).into(),
             // if you're slippery, you will fall
             ExprKind::If(
-                ExprKind::Literal("will-be-slippery").into(),
-                ExprKind::Literal("will-fall").into(),
+                LiteralExpr::atom("will-be-slippery").into(),
+                LiteralExpr::atom("will-fall").into(),
             ).into(),
             // one of these will happen
             ExprKind::Or(vec![
                 // it will rain, ...
-                ExprKind::Literal("it-rains").into(),
+                LiteralExpr::atom("it-rains").into(),
                 // or will be clear skies, ...
-                ExprKind::Literal("clear-skies").into(),
+                LiteralExpr::atom("clear-skies").into(),
                 // or, will be one of these:
                 ExprKind::Or(vec![
                     // all of these will happen:
                     ExprKind::And(vec![
                         // it rains, ...
-                        ExprKind::Literal("it-rains").into(),
+                        LiteralExpr::atom("it-rains").into(),
                         // and, if it rains, it thunders, ...
                         ExprKind::If(
-                            ExprKind::Literal("it-rains").into(),
-                            ExprKind::Literal("it-thunders").into(),
+                            LiteralExpr::atom("it-rains").into(),
+                            LiteralExpr::atom("it-thunders").into(),
                         ).into(),
                         // and, if it thunders, it lightnings
                         ExprKind::If(
-                            ExprKind::Literal("it-thunders").into(),
-                            ExprKind::Literal("it-lightnings").into(),
+                            LiteralExpr::atom("it-thunders").into(),
+                            LiteralExpr::atom("it-lightnings").into(),
                         ).into()
                     ]).into(),
                     // or, it will hail
-                    ExprKind::Literal("it-hails").into(),
+                    LiteralExpr::atom("it-hails").into(),
                     // or, it will snow
-                    ExprKind::Literal("it-snows").into(),
+                    LiteralExpr::atom("it-snows").into(),
                 ]).into()
             ]).into(),
         ];
         let goal = ExprKind::Or(vec![
-            ExprKind::Literal("clear-skies").into(),
-            ExprKind::Literal("will-fall").into()
+            LiteralExpr::atom("clear-skies").into(),
+            LiteralExpr::atom("will-fall").into()
         ]).into();
         let success = find_proof(givens, goal).expect("should not error");
         assert_eq!(success, true);
