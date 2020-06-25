@@ -25,7 +25,11 @@ impl fmt::Debug for LiteralExpr<'_> {
         if self.args.is_empty() {
             write!(f, "{}", self.name)?;
         } else {
-            f.debug_tuple(self.name).entries(self.args.clone()).finish()?;
+            let mut dt = f.debug_tuple(self.name);
+            for arg in &self.args {
+                dt.field(arg);
+            }
+            dt.finish()?;
         }
         Ok(())
     }

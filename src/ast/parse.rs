@@ -5,6 +5,7 @@ use pest_derive::*;
 
 use crate::ast::{Expr, ExprKind, LiteralExpr};
 use crate::error::BoxedErrorTrait;
+use itertools::{Itertools, Position};
 
 
 #[derive(Parser)]
@@ -188,10 +189,28 @@ fn explain_reserved(source: &str, mut error: Error<Rule>) -> Error<Rule> {
         }
         Ok(pair) => pair
     };
-    error.variant = ErrorVariant::CustomError {
-        message: format!("unexpected reserved word `{}`; expected literal, negation, or parenthetical",
-                           pair.as_str().trim()
-        )
+    let mut msg = format!("unexpected reserved word `{}`; expected ",
+                           pair.as_str().trim());
+    match &error.variant {
+        ErrorVariant::CustomError { message, .. } => {
+            msg.push_str(message);
+        },
+        ErrorVariant::ParsingError { positives, .. } => {
+            for elem in positives.iter().with_position() {
+                match elem {
+                    Position::First(r) | Position::Middle(r) => {
+                        msg.push_str(&format!("{:?}, ", r));
+                    }
+                    Position::Only(r) => {
+                        msg.push_str(&format!("{:?}", r));
+                    }
+                    Position::Last(r) => {
+                        msg.push_str(&format!("or {:?}", r));
+                    }
+                }
+            }
+        }
     };
+    error.variant = ErrorVariant::CustomError{ message: msg };
     error
 }

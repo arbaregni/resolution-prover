@@ -32,11 +32,11 @@ exis = { "exists" }
 
 parenthetical = { "(" ~ expr ~ ")" }
 
-arg = { expr }
+arg = { pred | literal }
 
 pred = { literal ~ "(" ~ (arg ~ ",")* ~ arg? ~ ")" }
 
-quantified = { (univ | exis) ~ literal ~ ":" ~ arg }
+quantified = { (univ | exis) ~ literal ~ ":" ~ expr }
 
 term = _{
      pred | quantified | parenthetical | negation | literal
