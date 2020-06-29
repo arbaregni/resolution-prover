@@ -30,6 +30,9 @@ impl <'a> LiteralExpr<'a> {
     pub fn predicate(name: &'a str, args: Vec<LiteralExpr<'a>>) -> LiteralExpr<'a> {
         LiteralKind::Function(name, args).into_expr()
     }
+    pub fn variable(name: &'a str) -> LiteralExpr<'a> {
+        LiteralKind::Variable(name).into_expr()
+    }
     pub fn into(self) -> Expr<'a> {
         ExprKind::Literal(self).into()
     }
@@ -113,20 +116,27 @@ impl fmt::Debug for LiteralExpr<'_> {
         match &self.kind {
             Variable(name) => write!(f, "${}", name)?,
             Function(name, args) => {
-                if args.is_empty() {
-                    write!(f, "{}", name)?;
-                } else {
-                    let mut dt = f.debug_tuple(name);
+                write!(f, "{}", name)?;
+                if !args.is_empty() {
+                    let mut first = true;
                     for arg in args {
-                        dt.field(arg);
+                        if first {
+                            first = false;
+                            write!(f, "(")?;
+                        } else {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{:?}", arg)?;
                     }
-                    dt.finish()?;
+                    write!(f, ")")?;
                 }
             }
         }
         Ok(())
     }
 }
+
+
 #[cfg(test)]
 mod tests {
     use crate::ast::LiteralKind::{Function, Variable};
@@ -270,6 +280,4 @@ mod tests {
         ]).into_expr();
         assert_eq!(left.unify(&right), None);  // can not unify without infinite descent
     }
-
-
 }

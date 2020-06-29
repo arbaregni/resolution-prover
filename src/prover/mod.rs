@@ -58,26 +58,27 @@ mod tests {
     fn resolution_simple_0() {
         let a = clause!(p, q);
         let b = clause!(~q, r);
-        assert_eq!(Clause::resolve(&a, &b), clause!(p, r));
+        assert_eq!(Clause::resolve(&a, &b), Some(clause!(p, r)));
     }
     #[test]
     fn resolution_simple_1() {
         let a = clause!(~p, q); // equivalent to p -> q
         let b = clause!(p);
-        assert_eq!(Clause::resolve(&a, &b), clause!(q));
+        assert_eq!(Clause::resolve(&a, &b), Some(clause!(q)));
     }
     #[test]
     fn resolution_simple_2() {
         let a = clause!(p);
         let b = clause!(~p);
-        assert_eq!(Clause::resolve(&a, &b), clause!());
+        assert_eq!(Clause::resolve(&a, &b), Some(clause!()));
     }
     #[test]
     fn resolution_simple_3() {
         let a = clause!(~m, p, q);
         let b = clause!(~p, q);
-        assert_eq!(Clause::resolve(&a, &b), clause!(~m, q));
+        assert_eq!(Clause::resolve(&a, &b), Some(clause!(~m, q)));
     }
+
     #[test]
     fn builder_tautology_0() {
         let opt_clause = ClauseBuilder::new()
@@ -175,6 +176,127 @@ mod tests {
         // (8) {}           resolution (5, 7)
 
         assert_eq!(clause_set.has_contradiction(), true);        // there is a contradiction
+    }
+    #[test]
+    fn satisfy_fol_0() {
+        let mut clause_set = ClosedClauseSet::new();
+
+        // P(x) implies Q(x)
+        let clause = ClauseBuilder::new()
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::variable("x"),
+            ]), false)
+            .set_lit(LiteralExpr::predicate("Q", vec![
+                LiteralExpr::variable("x"),
+            ]), true)
+            .finish().expect("not a tautology");
+        clause_set.integrate_clause(clause);
+
+        // P(a)
+        let clause = ClauseBuilder::new()
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::atom("a"),
+            ]), true)
+            .finish().expect("not a tautology");
+        clause_set.integrate_clause(clause);
+
+        assert_eq!(clause_set.has_contradiction(), false);
+
+        // make sure that we've derived what Q(a)
+        let clause = ClauseBuilder::new()
+            .set_lit(LiteralExpr::predicate("Q", vec![
+                LiteralExpr::atom("a"),
+            ]), true)
+            .finish().expect("not a tautology");
+
+        println!("{:#?}", clause_set);
+        assert!(clause_set.clauses.contains(&clause));
+    }
+    #[test]
+    fn satisfy_fol_1() {
+        let mut clause_set = ClosedClauseSet::new();
+
+        // P(x) or P(y)
+        let clause = ClauseBuilder::new()
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::variable("x"),
+            ]), true)
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::variable("y"),
+            ]), true)
+            .finish().expect("not a tautology");
+        clause_set.integrate_clause(clause);
+
+        // ~P(a)
+        let clause = ClauseBuilder::new()
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::atom("a"),
+            ]), false)
+            .finish().expect("not a tautology");
+        clause_set.integrate_clause(clause);
+
+        let success = clause_set.has_contradiction();
+        // derivation:
+        // P(x) or P(y)
+        // P(x)           reduce (factor) by unifying x and y
+        // P(a)           unify x with a
+        // ~P(a)
+        // contradiction!
+        println!("{:#?}", clause_set);
+        assert_eq!(success, true);
+    }
+    #[test]
+    fn satisfy_fol_2() {
+        // P(u) or P(f(u))
+        let clause_0 = ClauseBuilder::new()
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::variable("u")
+            ]), true)
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::predicate("f", vec![
+                    LiteralExpr::variable("u")
+                ])
+            ]), true)
+            .finish().expect("not a tautology");
+        // ~P(v) or P(f(w))
+        let clause_1 = ClauseBuilder::new()
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::variable("v")
+            ]), false)
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::predicate("f", vec![
+                    LiteralExpr::variable("w")
+                ])
+            ]), true)
+            .finish().expect("not a tautology");
+        // ~P(x) or not P(f(x))
+        let clause_2 = ClauseBuilder::new()
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::variable("x")
+            ]), false)
+            .set_lit(LiteralExpr::predicate("P", vec![
+                LiteralExpr::predicate("f", vec![
+                    LiteralExpr::variable("x")
+                ])
+            ]), false)
+            .finish().expect("not a tautology");
+        let mut clause_set = ClosedClauseSet::new();
+        clause_set.integrate_clause(clause_0);
+        clause_set.integrate_clause(clause_1);
+        clause_set.integrate_clause(clause_2);
+        let success = clause_set.has_contradiction();
+        // derivation of a contradiction:
+        // 0.  P(u) or  P(f(u))  given 0
+        // 1. ~P(v) or  P(f(w))  given 1
+        // 2. ~P(x) or ~P(f(x))  given 2
+        // 3.  P(u) or P(f(w))   resolve (0) and (1), with v = f(u)
+        // 4.  P(f(w))           factor (3) with u = f(w)
+        // 5. ~P(f(f(w)))        resolve (4) and (2) with x = f(w)
+        // 6. :(
+
+        println!("{:#?}", clause_set);
+        assert_eq!(success, true);
+
     }
 
     #[test]

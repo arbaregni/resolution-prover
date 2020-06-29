@@ -14,9 +14,12 @@ pub fn find_proof(givens: Vec<Expr<'_>>, goal: Expr<'_>) -> Result<bool, BoxedEr
     goal
         .negate()
         .into_clauses(&mut clause_set)?;
-    // println!("clause_set: {:#?}", clause_set);
+    println!("clause_set: {:#?}", clause_set);
     // search for the contradiction
-    Ok( clause_set.has_contradiction() )
+    let success = clause_set.has_contradiction();
+
+    println!("after: {:#?}", clause_set);
+    Ok( success )
 }
 
 impl ClosedClauseSet<'_> {
@@ -28,21 +31,24 @@ impl ClosedClauseSet<'_> {
                 if clause.is_empty() {
                     return true; // found a contradiction!
                 }
-                let to_resolve = self.clauses_with_one_conflict(clause);
-                let resolvants = to_resolve
-                    .into_iter()
-                    .map(|id| self.get(id))
-                    .map(|prev| clause.resolve(prev))
+                let to_resolve = self.possible_resolution_partners(clause);
+                let products = to_resolve
+                    .into_iter()        // iterate over everything to resolve, and resolve them with the original clause
+                    .filter_map(|(id, sub)| {
+                        let other = self.get(id);
+                        clause.resolve_under_substitution(other, &sub)
+                    })
+                    .chain(self.factors(clause)) // add every reduction of the clause to the vector
                     .collect::<Vec<Clause>>();
 
-                // println!("============================================================");
-                // println!("resolving {:?} produced: {:?}", clause, resolvants);
+                println!("============================================================");
+                println!("resolving {:?} produced: {:?}", clause, products);
 
-                for resolvant in resolvants.into_iter() {
-                    if resolvant.is_empty() {
+                for product in products.into_iter() {
+                    if product.is_empty() {
                         return true; // found a contradiction
                     }
-                    self.integrate_clause(resolvant);
+                    self.integrate_clause(product);
                 }
 
                 // println!("current set: {:#?}", self);
@@ -60,47 +66,3 @@ impl ClosedClauseSet<'_> {
     }
 }
 
-/*
-#[allow(dead_code)]
-pub fn has_contradiction(clause_set: IndexSet<ClauseId>, interner: &mut ClosedClauseSet) -> bool {
-    let mut seen_before = IndexSet::new();
-    let mut to_search = clause_set;
-
-    // println!("{:#?}", interner);
-    // println!("seen_before: {:#?}", seen_before);
-    // println!("to_search: {:#?}", to_search);
-
-    while let Some(clause_id) = to_search.pop() {
-        let clause = interner.get(clause_id);
-        if clause.is_empty() {
-            return true; // found a contradiction!
-        }
-        // resolve this clause with each clause that has exactly one conflict with it
-        let to_resolve = interner.clauses_with_one_conflict(clause);
-        let resolvants = to_resolve
-            .into_iter()
-            .map(|id| interner.get(id))
-            .filter_map(|prev| clause.resolve(prev))
-            .collect::<Vec<_>>();
-
-        println!("============================================================");
-        println!("resolving {:?} produced: {:?}", clause, resolvants);
-
-        for resolved in resolvants {
-            if resolved.is_empty() {
-                return true; // we found a contradiction
-            }
-            let id = interner.integrate_clause(resolved);
-            if seen_before.contains(&id) { continue; }
-            to_search.insert(id);
-        }
-        // now that we are done with this id, we can insert it into the seen_before
-        seen_before.insert(clause_id);
-
-        println!("{:#?}", interner);
-        println!("seen_before: {:#?}", seen_before);
-        println!("to_search: {:#?}", to_search);
-    }
-    false
-}
- */

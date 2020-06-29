@@ -128,4 +128,15 @@ mod tests {
         // tears  QED
         assert_eq!(success, true);
     }
+
+    #[test]
+    fn first_order_0() {
+        let givens = vec![
+            "forall x: P(x) implies Q(x)",
+            "P(a)",
+        ];
+        let goal = "Q(a)";
+        let success = service_proof_request(givens.as_slice(), goal).expect("should not error");
+        assert_eq!(success, true);
+    }
 }

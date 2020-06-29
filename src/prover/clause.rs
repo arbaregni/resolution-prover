@@ -1,5 +1,4 @@
 use std::collections::btree_map::Entry;
-use std::collections::{HashMap};
 use indexmap::set::IndexSet;
 use std::fmt::Formatter;
 use std::fmt;
@@ -7,7 +6,7 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 use std::cmp::Ordering;
 
-use crate::ast::LiteralExpr;
+use crate::ast::{LiteralExpr, Substitution};
 
 /// A recursive macro that builds a clause from terms
 #[allow(unused_macros)]
@@ -63,7 +62,8 @@ pub struct ClosedClauseSet<'a> {
     pub clauses: IndexSet<Clause<'a>>,
     /// maps `(variable_name, truth_value)` to vectors of clauses,
     /// which contain that `variable_name` with that `truth_value`
-    term_map: HashMap<(LiteralExpr<'a>, bool), Vec<ClauseId>>
+    term_map_true: TermMap<'a>,
+    term_map_false: TermMap<'a>,
 }
 
 impl <'a> ClauseBuilder<'a> {
@@ -78,6 +78,10 @@ impl <'a> ClauseBuilder<'a> {
     #[allow(dead_code)]
     pub fn set(mut self, var_name: &'a str, truth_value: bool) -> ClauseBuilder {
         self.insert(LiteralExpr::atom(var_name), truth_value);
+        self
+    }
+    pub fn set_lit(mut self, literal: LiteralExpr<'a>, truth_value: bool) -> ClauseBuilder {
+        self.insert(literal, truth_value);
         self
     }
     /// Inserts a specific variable name with its truth-value,
@@ -112,51 +116,80 @@ impl <'a> Clause<'a> {
     /// Then, it must be the case that p is true, OR r is true,
     ///       and we don't know anything about q. This gives us:
     ///     `{p, r}` (p is true OR r is true)
-    pub fn resolve(&self, other: &Clause<'a>) -> Clause<'a> {
+    pub fn resolve(&self, other: &Clause<'a>) -> Option<Clause<'a>> {
+        let sub = Substitution::new();
+        self.resolve_under_substitution(other, &sub)
+    }
+    /// apply the resolution rule to two clauses, which are guaranteed to have EXACTLY one conflict,
+    /// upto the substitution `sub` which is passed to it, and applied to every term before resolving
+    /// For example, suppose we have
+    ///    `{~P($x), Q($x)}` (P($x) is false OR Q($x) is true)
+    ///    `{P(a)}`          (P(a) is true)
+    /// And we resolve under the substitution {$x => a}, we get:
+    ///    `{~P(a), Q(a)}`
+    ///    `{P(a)}`
+    /// And resolution proceeds as normal, giving us:
+    ///    `{Q(a)}`
+    pub fn resolve_under_substitution(&self, other: &Clause<'a>, sub: &Substitution<'a>) -> Option<Clause<'a>> {
         // we know at least one term will conflict, otherwise the new clause could have everything in both
         let capacity = self.terms.len() + other.terms.len() - 1;
         let mut resolvant_terms = Vec::with_capacity(capacity);
-        let mut left_iter = self.terms.iter().peekable();
-        let mut right_iter = other.terms.iter().peekable();
+        let mut left_iter = self.terms
+            .iter()
+            .map(|(term, truth)| {
+                (term.substitute(sub), *truth)
+            })
+            .peekable();
+        let mut right_iter = other.terms
+            .iter()
+            .map(|(term, truth)| {
+                (term.substitute(sub), *truth)
+            })
+            .peekable();
+        let mut canceled = false;
         loop {
             match (left_iter.peek(), right_iter.peek()) {
                 // there are two sides
                 ( Some((lname, ltruth)), Some((rname, rtruth)) ) => match lname.cmp(rname) {
                     Ordering::Less => {
                         // process the left side
-                        left_iter.next();
                         resolvant_terms.push( (lname.clone(), *ltruth));
+                        left_iter.next();
                     },
                     Ordering::Greater => {
                         // process the right side
-                        right_iter.next();
                         resolvant_terms.push( (rname.clone(), *rtruth));
+                        right_iter.next();
                     },
                     Ordering::Equal => {
                         // present the same variable, process both
-                        left_iter.next(); right_iter.next();
                         if ltruth == rtruth {
                             // terms are the same, it's just a redundancy
                             resolvant_terms.push( (lname.clone(), *rtruth));
                         } else {
                             // these are the conflicting terms, and we do not include them
+                            if canceled {
+                                return None; // we've already canceled terms: just return `None` right now
+                            }
+                            canceled = true;
                         }
+                        left_iter.next(); right_iter.next();
                     },
                 },
                 // there is only the left to process
                 ( Some((name, truth)), None ) => {
-                    left_iter.next();
                     resolvant_terms.push((name.clone(), *truth));
+                    left_iter.next();
                 }
                 // there is only the right to process
                 ( None, Some((name, truth)) ) => {
-                    right_iter.next();
                     resolvant_terms.push((name.clone(), *truth));
+                    right_iter.next();
                 }
                 (None, None) => { break; }
             }
         }
-        Clause { terms: resolvant_terms }
+        Some( Clause { terms: resolvant_terms } )
     }
     /// Returns true if this is the empty clause, i.e falso
     pub fn is_empty(&self) -> bool {
@@ -168,56 +201,70 @@ impl <'a> ClosedClauseSet<'a> {
     pub fn new() -> ClosedClauseSet<'a> {
         ClosedClauseSet {
             clauses: IndexSet::new(),
-            term_map: HashMap::new(),
+            term_map_true: TermMap::new(),
+            term_map_false: TermMap::new(),
         }
     }
-    /// get all clauses who have exactly one conflict with `clause`
-    pub fn clauses_with_one_conflict<'s>(&self, clause: &Clause<'a>) -> Vec<ClauseId>
+    /// get all clauses who have have conflicts with `clause` under some unififer
+    pub fn possible_resolution_partners<'s>(&self, clause: &Clause<'a>) -> Vec<(ClauseId, Substitution<'a>)>
         where 'a: 's
     {
         // count the number of times we visit each clause id
-        let num_clauses = self.clauses.len();
-        let mut counts = Vec::with_capacity(num_clauses);
-        for _ in 0..num_clauses { counts.push(0); }
-
+        let mut result = Vec::new();
         // iterate over the terms in `clause`
-        for (name, truth_value) in clause.terms.iter() {
+        for (term, truth_value) in clause.terms.iter() {
             // increment the count of each clause with the same name, but opposite truth_value
-            for clause_id in self.term_map[&(name.clone(), !*truth_value)].iter() {
-                counts[clause_id.0] += 1;
+            // get the terms for the *opposite* truth value
+            let term_map = if !*truth_value { &self.term_map_true } else { &self.term_map_false };
+            for (uses, sub) in term_map.unifies_with(term).into_iter() {
+                for clause_id in uses {
+                    let entry = (*clause_id, sub.clone());
+                    result.push(entry);
+                }
             }
         }
-        // now, we take only those with exactly `1` count
-        counts.iter()
-            .enumerate()
-            .filter_map(|(idx, count)| {
-                if *count == 1 {
-                    Some( ClauseId(idx) )
-                } else {
-                    None
+        result
+    }
+    /// Returns a vector of all clauses we can get by applying unifying terms inside the clause
+    /// For instance:
+    ///    `{P($x), P($y), Q($x, $y)}` may be factored to:
+    ///     `{P($x), Q($x, $x)}` via `$y -> $x`
+    ///     `{P($y), Q($y, $y)}` via `$x -> $y`
+    pub fn factors(&self, clause: &Clause<'a>) -> Vec<Clause<'a>> {
+        // test pairwise for possible unifiers
+        let mut subs = Vec::new();
+        for (x, x_truth) in clause.terms.iter() {
+            for (y, y_truth) in clause.terms.iter() {
+                if *x_truth != *y_truth { continue; }
+                if let Some(sub) = x.unify(y) {
+                    if sub.is_empty() { continue; }
+                    subs.push(sub);
                 }
+            }
+        }
+        // apply each of those unifiers to our clause and reduce
+        subs.into_iter()
+            .filter_map(|sub| {
+                let mut builder = ClauseBuilder::new();
+                for (term, truth_value) in clause.terms.iter() {
+                    // apply the substitution and insert the term
+                    let mapped = term.substitute(&sub);
+                    builder.insert(mapped, *truth_value);
+                }
+                builder.finish() // tautologies will get filtered out
             })
-            .collect()
-
+            .collect::<Vec<_>>()
     }
     /// Inserts the clause, providing the index into the set
+    /// Does not search for resolutions and factoring yet
     pub fn integrate_clause(&mut self, clause: Clause<'a>) -> ClauseId {
         let (idx, _) = self.clauses.insert_full(clause);
         let clause_id = ClauseId(idx);
         let clause: &Clause = self.clauses.get_index(idx).expect("missing clause");
-        for (name, truth_value) in clause.terms.iter() {
-            // add the name, and truth value to the term map
-            let cache = self.term_map
-                .entry((name.clone(), *truth_value))
-                .or_insert(Vec::with_capacity(1));
-            // this clause has that (name, truth_value)
-            cache.push(clause_id);
-            // since we expect to call this on ever higher indices, it should be sorted
-            // thus, this removes all the duplicates
-            cache.dedup();
-            // make sure the negation also exists
-            self.term_map.entry((name.clone(), !*truth_value))
-                .or_insert(Vec::new());
+        for (literal, truth_value) in clause.terms.iter() {
+            // lookup the literal, and insert a new reference
+            let term_map = if *truth_value { &mut self.term_map_true } else { &mut self.term_map_false };
+            term_map.update(literal, clause_id);
         }
         // println!("integrated new clause, clauses: {:#?}", self.clauses);
         clause_id
@@ -225,8 +272,63 @@ impl <'a> ClosedClauseSet<'a> {
     pub fn get<'s>(&'s self, id: ClauseId) -> &'s Clause<'a> {
         self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
     }
+
+}
+/// Maps literal expressions, up to unification, to clauses who use them
+#[derive(Clone)]
+struct TermMap<'a> {
+    data: Vec<(LiteralExpr<'a>, Value)>
+}
+/// Values in the `TermMap`:
+/// sorted (ascending, no duplicates) uses of the associated term
+type Value = Vec<ClauseId>;
+
+impl <'a> TermMap<'a> {
+    fn new() -> TermMap<'a> {
+        TermMap { data: Vec::new() }
+    }
+    /// Return an iterator with all references to clauses containing terms that unify with `term`
+    fn unifies_with<'s>(&'s self, term: &'s LiteralExpr<'a>) -> impl Iterator<Item = (&'s Value, Substitution<'a>)> + 's {
+        self.data
+            .iter()
+            .filter_map(move |(elem, value)| {
+                if let Some(sub) = term.unify(elem) {
+                    Some((value, sub))
+                } else {
+                    None
+                }
+            })
+    }
+    /// Updates the `TermMap` to include a new usage of `term`, creating an entry if it doesn't exist
+    fn update(&mut self, term: &LiteralExpr<'a>, clause_id: ClauseId) {
+        let found = self.data
+            .iter_mut()
+            .find(|(t,_)| t == term);
+        let uses = if let Some((_, uses)) = found {
+            uses
+        } else {
+            let i = self.data.len();
+            let value: Value = Vec::with_capacity(1);
+            self.data.push((term.clone(), value));
+            &mut self.data[i].1
+        };
+        // push the new usage
+        uses.push(clause_id);
+        // since we expect to call this on ever higher indices, it should be sorted
+        // thus, this removes all the duplicates
+        uses.dedup();
+    }
 }
 
+impl fmt::Debug for TermMap<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut dm = f.debug_map();
+        for (elem, value) in self.data.iter() {
+            dm.entry(elem, value);
+        }
+        dm.finish()
+    }
+}
 
 impl fmt::Debug for Clause<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -253,10 +355,3 @@ impl fmt::Debug for ClauseId {
         write!(f, "Clause {}", self.0)
     }
 }
-/*
-impl fmt::Debug for ClosedClauseSet {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-
-    }
-}
- */
