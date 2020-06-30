@@ -1,10 +1,13 @@
 #[macro_use]
 mod clause;
-
 pub use clause::*;
+
+mod term_map;
+pub use term_map::*;
 
 mod search;
 pub use search::*;
+
 use crate::ast;
 use crate::error::BoxedErrorTrait;
 

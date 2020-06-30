@@ -8,6 +8,7 @@ use LiteralKind::*;
 pub struct LiteralExpr<'a> {
     kind: LiteralKind<'a>
 }
+/// The kind of a literal expression (LiteralExpr wraps around this for now)
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum LiteralKind<'a> {
     /// Variables are terms that may take on any value. They are produced by universal quantifiers
@@ -25,10 +26,10 @@ impl <'a> LiteralKind<'a> {
 }
 impl <'a> LiteralExpr<'a> {
     pub fn atom(name: &'a str) -> LiteralExpr<'a> {
-        LiteralKind::Function(name, Vec::new()).into_expr()
+        Function(name, Vec::new()).into_expr()
     }
     pub fn predicate(name: &'a str, args: Vec<LiteralExpr<'a>>) -> LiteralExpr<'a> {
-        LiteralKind::Function(name, args).into_expr()
+        Function(name, args).into_expr()
     }
     pub fn variable(name: &'a str) -> LiteralExpr<'a> {
         LiteralKind::Variable(name).into_expr()
@@ -36,11 +37,14 @@ impl <'a> LiteralExpr<'a> {
     pub fn into(self) -> Expr<'a> {
         ExprKind::Literal(self).into()
     }
+    pub fn kind(&self) -> &LiteralKind<'a> {
+        &self.kind
+    }
     /// Search for the variable name in our structure
     pub fn contains(&self, var_name: &str) -> bool {
         match &self.kind {
-            LiteralKind::Variable(name) => *name == var_name,
-            LiteralKind::Function(_, args) => args.iter().any(|a| a.contains(var_name)),
+            Variable(name) => *name == var_name,
+            Function(_, args) => args.iter().any(|a| a.contains(var_name)),
         }
     }
     /// Perform the given substitution, producing a new literal expression

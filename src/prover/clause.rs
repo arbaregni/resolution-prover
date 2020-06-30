@@ -7,6 +7,7 @@ use itertools::Itertools;
 use std::cmp::Ordering;
 
 use crate::ast::{LiteralExpr, Substitution};
+use crate::prover::TermMap;
 
 /// A recursive macro that builds a clause from terms
 #[allow(unused_macros)]
@@ -53,7 +54,7 @@ pub struct ClauseBuilder<'a> {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 /// id's used to reference interned clauses
-pub struct ClauseId(usize);
+pub struct ClauseId(pub usize);
 
 #[derive(Debug)]
 /// interns clauses, and provides lookup by variable and truth value
@@ -274,61 +275,7 @@ impl <'a> ClosedClauseSet<'a> {
     }
 
 }
-/// Maps literal expressions, up to unification, to clauses who use them
-#[derive(Clone)]
-struct TermMap<'a> {
-    data: Vec<(LiteralExpr<'a>, Value)>
-}
-/// Values in the `TermMap`:
-/// sorted (ascending, no duplicates) uses of the associated term
-type Value = Vec<ClauseId>;
 
-impl <'a> TermMap<'a> {
-    fn new() -> TermMap<'a> {
-        TermMap { data: Vec::new() }
-    }
-    /// Return an iterator with all references to clauses containing terms that unify with `term`
-    fn unifies_with<'s>(&'s self, term: &'s LiteralExpr<'a>) -> impl Iterator<Item = (&'s Value, Substitution<'a>)> + 's {
-        self.data
-            .iter()
-            .filter_map(move |(elem, value)| {
-                if let Some(sub) = term.unify(elem) {
-                    Some((value, sub))
-                } else {
-                    None
-                }
-            })
-    }
-    /// Updates the `TermMap` to include a new usage of `term`, creating an entry if it doesn't exist
-    fn update(&mut self, term: &LiteralExpr<'a>, clause_id: ClauseId) {
-        let found = self.data
-            .iter_mut()
-            .find(|(t,_)| t == term);
-        let uses = if let Some((_, uses)) = found {
-            uses
-        } else {
-            let i = self.data.len();
-            let value: Value = Vec::with_capacity(1);
-            self.data.push((term.clone(), value));
-            &mut self.data[i].1
-        };
-        // push the new usage
-        uses.push(clause_id);
-        // since we expect to call this on ever higher indices, it should be sorted
-        // thus, this removes all the duplicates
-        uses.dedup();
-    }
-}
-
-impl fmt::Debug for TermMap<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut dm = f.debug_map();
-        for (elem, value) in self.data.iter() {
-            dm.entry(elem, value);
-        }
-        dm.finish()
-    }
-}
 
 impl fmt::Debug for Clause<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
