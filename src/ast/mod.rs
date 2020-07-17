@@ -10,7 +10,7 @@ pub use parse::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{ExprKind, parse, LiteralExpr, Expr};
+    use crate::ast::{ExprKind, parse, Term, Expr};
     use crate::prover::ClosedClauseSet;
     use crate::ast;
 
@@ -18,16 +18,16 @@ mod tests {
     fn parse_simple_0() {
         let source = "llama";
         let expr = parse(source).expect("should not error");
-        assert_eq!(expr, LiteralExpr::atom("llama").into())
+        assert_eq!(expr, Term::atom("llama").into())
     }
     #[test]
     fn parse_simple_1() {
         let source = "sweet or sour or something";
         let expr = parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::Or(vec![
-            LiteralExpr::atom("sweet").into(),
-            LiteralExpr::atom("sour").into(),
-            LiteralExpr::atom("something").into(),
+            Term::atom("sweet").into(),
+            Term::atom("sour").into(),
+            Term::atom("something").into(),
         ]).into()
         )
     }
@@ -36,9 +36,9 @@ mod tests {
         let source = "hot and spicy and something";
         let expr = parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::And(vec![
-            LiteralExpr::atom("hot").into(),
-            LiteralExpr::atom("spicy").into(),
-            LiteralExpr::atom("something").into(),
+            Term::atom("hot").into(),
+            Term::atom("spicy").into(),
+            Term::atom("something").into(),
         ]).into()
         )
     }
@@ -47,8 +47,8 @@ mod tests {
         let source = "tasty implies good";
         let expr = parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::If(
-            LiteralExpr::atom("tasty").into(),
-            LiteralExpr::atom("good").into(),
+            Term::atom("tasty").into(),
+            Term::atom("good").into(),
         ).into()
         )
     }
@@ -57,7 +57,7 @@ mod tests {
         let source = "not pleasant";
         let expr = parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::Not(
-            LiteralExpr::atom("pleasant").into()
+            Term::atom("pleasant").into()
         ).into())
     }
     #[test]
@@ -65,8 +65,8 @@ mod tests {
         let source = "p iff q";
         let expr = parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::Iff(
-            LiteralExpr::atom("p").into(),
-            LiteralExpr::atom("q").into(),
+            Term::atom("p").into(),
+            Term::atom("q").into(),
         ).into())
     }
     #[test]
@@ -74,8 +74,8 @@ mod tests {
         let source = "p xor q";
         let expr = parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::Xor(
-            LiteralExpr::atom("p").into(),
-            LiteralExpr::atom("q").into(),
+            Term::atom("p").into(),
+            Term::atom("q").into(),
         ).into())
     }
 
@@ -112,12 +112,12 @@ mod tests {
         };
         assert_eq!(expr, ExprKind::Or(vec![
             ExprKind::And(vec![
-                LiteralExpr::atom("red").into(),
-                LiteralExpr::atom("blue").into(),
+                Term::atom("red").into(),
+                Term::atom("blue").into(),
             ]).into(),
             ExprKind::And(vec![
-                LiteralExpr::atom("green").into(),
-                LiteralExpr::atom("orange").into(),
+                Term::atom("green").into(),
+                Term::atom("orange").into(),
             ]).into(),
         ]).into());
     }
@@ -132,12 +132,12 @@ mod tests {
             }
         };
         assert_eq!(expr, ExprKind::And(vec![
-            LiteralExpr::atom("red").into(),
+            Term::atom("red").into(),
             ExprKind::Or(vec![
-                LiteralExpr::atom("blue").into(),
-                LiteralExpr::atom("green").into(),
+                Term::atom("blue").into(),
+                Term::atom("green").into(),
             ]).into(),
-            LiteralExpr::atom("orange").into(),
+            Term::atom("orange").into(),
         ]).into());
     }
     #[test]
@@ -153,23 +153,23 @@ mod tests {
         assert_eq!(expr, ExprKind::And(vec![
             ExprKind::Or(vec![
                 ExprKind::If(
-                    LiteralExpr::atom("ace").into(),
-                    LiteralExpr::atom("king").into(),
+                    Term::atom("ace").into(),
+                    Term::atom("king").into(),
                 ).into(),
                 ExprKind::If(
-                    LiteralExpr::atom("king").into(),
-                    LiteralExpr::atom("ace").into(),
+                    Term::atom("king").into(),
+                    Term::atom("ace").into(),
                 ).into(),
             ]).into(),
             ExprKind::Not(
                 ExprKind::And(vec![
                     ExprKind::If(
-                        LiteralExpr::atom("ace").into(),
-                        LiteralExpr::atom("king").into(),
+                        Term::atom("ace").into(),
+                        Term::atom("king").into(),
                     ).into(),
                     ExprKind::If(
-                        LiteralExpr::atom("king").into(),
-                        LiteralExpr::atom("ace").into(),
+                        Term::atom("king").into(),
+                        Term::atom("ace").into(),
                     ).into(),
                 ]).into(),
             ).into(),
@@ -184,13 +184,13 @@ mod tests {
                     ExprKind::Not(
                         ExprKind::Not(
                             ExprKind::Not(
-                                LiteralExpr::atom("apple").into()
+                                Term::atom("apple").into()
                             ).into()
                         ).into()
                     ).into()
             ).into()
         ).into();
-        let normalized = ExprKind::Not(LiteralExpr::atom("apple").into()).into();
+        let normalized = ExprKind::Not(Term::atom("apple").into()).into();
         assert_eq!(expr.normalize_negations(), normalized)
     }
 
@@ -198,16 +198,16 @@ mod tests {
     fn negate_normalize_1() {
         let expr: Expr = ExprKind::Not(
             ExprKind::And(vec![
-                LiteralExpr::atom("apple").into(),
-                LiteralExpr::atom("banana").into(),
+                Term::atom("apple").into(),
+                Term::atom("banana").into(),
             ]).into()
         ).into();
         let normalized = ExprKind::Or(vec![
             ExprKind::Not(
-                LiteralExpr::atom("apple").into()
+                Term::atom("apple").into()
             ).into(),
             ExprKind::Not(
-                LiteralExpr::atom("banana").into()
+                Term::atom("banana").into()
             ).into(),
         ]).into();
         assert_eq!(expr.normalize_negations(), normalized);
@@ -216,16 +216,16 @@ mod tests {
     fn negate_normalize_2() {
         let expr: Expr = ExprKind::Not(
             ExprKind::And(vec![
-                LiteralExpr::atom("apple").into(),
-                LiteralExpr::atom("banana").into(),
+                Term::atom("apple").into(),
+                Term::atom("banana").into(),
             ]).into()
         ).into();
         let normalized = ExprKind::Or(vec![
             ExprKind::Not(
-                LiteralExpr::atom("apple").into()
+                Term::atom("apple").into()
             ).into(),
             ExprKind::Not(
-                LiteralExpr::atom("banana").into()
+                Term::atom("banana").into()
             ).into(),
         ]).into();
         assert_eq!(expr.normalize_negations(), normalized);
@@ -234,16 +234,16 @@ mod tests {
     fn negate_normalize_3() {
         let expr: Expr = ExprKind::Not(
             ExprKind::Or(vec![
-                LiteralExpr::atom("apple").into(),
-                LiteralExpr::atom("banana").into(),
+                Term::atom("apple").into(),
+                Term::atom("banana").into(),
             ]).into()
         ).into();
         let normalized = ExprKind::And(vec![
             ExprKind::Not(
-                LiteralExpr::atom("apple").into(),
+                Term::atom("apple").into(),
             ).into(),
             ExprKind::Not(
-                LiteralExpr::atom("banana").into(),
+                Term::atom("banana").into(),
             ).into(),
         ]).into();
         assert_eq!(expr.normalize_negations(), normalized)
@@ -252,13 +252,13 @@ mod tests {
     fn negate_normalize_4() {
         let expr: Expr = ExprKind::Not(
             ExprKind::Or(vec![
-                LiteralExpr::atom("apple").into(),
-                LiteralExpr::atom("banana").into(),
+                Term::atom("apple").into(),
+                Term::atom("banana").into(),
                 ExprKind::Not(
                     ExprKind::And(vec![
-                        LiteralExpr::atom("coconut").into(),
+                        Term::atom("coconut").into(),
                         ExprKind::Not(
-                            LiteralExpr::atom("dragonfruit").into(),
+                            Term::atom("dragonfruit").into(),
                         ).into()
                     ]).into()
                 ).into(),
@@ -266,15 +266,15 @@ mod tests {
         ).into();
         let normalized = ExprKind::And(vec![
             ExprKind::Not(
-                LiteralExpr::atom("apple").into(),
+                Term::atom("apple").into(),
             ).into(),
             ExprKind::Not(
-                LiteralExpr::atom("banana").into(),
+                Term::atom("banana").into(),
             ).into(),
             ExprKind::And(vec![
-                LiteralExpr::atom("coconut").into(),
+                Term::atom("coconut").into(),
                 ExprKind::Not(
-                    LiteralExpr::atom("dragonfruit").into()
+                    Term::atom("dragonfruit").into()
                 ).into()
             ]).into(),
         ]).into();
@@ -286,33 +286,33 @@ mod tests {
             ExprKind::Or(vec![
                 ExprKind::Or(vec![
                     ExprKind::Or(vec![
-                        LiteralExpr::atom("a").into(),
-                        LiteralExpr::atom("b").into(),
+                        Term::atom("a").into(),
+                        Term::atom("b").into(),
                     ]).into(),
                 ]).into(),
-                LiteralExpr::atom("c").into(),
+                Term::atom("c").into(),
             ]).into(),
-            LiteralExpr::atom("d").into(),
-            LiteralExpr::atom("e").into(),
+            Term::atom("d").into(),
+            Term::atom("e").into(),
             ExprKind::Or(vec![
-                LiteralExpr::atom("f").into(),
+                Term::atom("f").into(),
             ]).into(),
-            LiteralExpr::atom("g").into(),
+            Term::atom("g").into(),
             ExprKind::Or(vec![
-                LiteralExpr::atom("h").into(),
+                Term::atom("h").into(),
             ]).into(),
-            LiteralExpr::atom("i").into(),
+            Term::atom("i").into(),
         ]).into();
         let normalized = ExprKind::Or(vec![
-            LiteralExpr::atom("a").into(),
-            LiteralExpr::atom("b").into(),
-            LiteralExpr::atom("c").into(),
-            LiteralExpr::atom("d").into(),
-            LiteralExpr::atom("e").into(),
-            LiteralExpr::atom("f").into(),
-            LiteralExpr::atom("g").into(),
-            LiteralExpr::atom("h").into(),
-            LiteralExpr::atom("i").into(),
+            Term::atom("a").into(),
+            Term::atom("b").into(),
+            Term::atom("c").into(),
+            Term::atom("d").into(),
+            Term::atom("e").into(),
+            Term::atom("f").into(),
+            Term::atom("g").into(),
+            Term::atom("h").into(),
+            Term::atom("i").into(),
         ]).into();
         assert_eq!(expr.normalize_negations(), normalized);
     }
@@ -322,39 +322,39 @@ mod tests {
             ExprKind::And(vec![
                 ExprKind::And(vec![
                     ExprKind::And(vec![
-                        LiteralExpr::atom("p").into(),
+                        Term::atom("p").into(),
                     ]).into(),
-                    LiteralExpr::atom("q").into(),
+                    Term::atom("q").into(),
                 ]).into(),
                 ExprKind::And(vec![
-                    LiteralExpr::atom("r").into(),
-                    LiteralExpr::atom("s").into(),
-                    LiteralExpr::atom("t").into(),
-                    LiteralExpr::atom("u").into(),
+                    Term::atom("r").into(),
+                    Term::atom("s").into(),
+                    Term::atom("t").into(),
+                    Term::atom("u").into(),
                 ]).into(),
                 ExprKind::And(vec![
-                    LiteralExpr::atom("v").into(),
-                    LiteralExpr::atom("w").into(),
+                    Term::atom("v").into(),
+                    Term::atom("w").into(),
                 ]).into(),
             ]).into(),
-            LiteralExpr::atom("x").into(),
+            Term::atom("x").into(),
             ExprKind::And(vec![
-                LiteralExpr::atom("y").into(),
-                LiteralExpr::atom("z").into(),
+                Term::atom("y").into(),
+                Term::atom("z").into(),
             ]).into(),
         ]).into();
         let normalized = ExprKind::And(vec![
-            LiteralExpr::atom("p").into(),
-            LiteralExpr::atom("q").into(),
-            LiteralExpr::atom("r").into(),
-            LiteralExpr::atom("s").into(),
-            LiteralExpr::atom("t").into(),
-            LiteralExpr::atom("u").into(),
-            LiteralExpr::atom("v").into(),
-            LiteralExpr::atom("w").into(),
-            LiteralExpr::atom("x").into(),
-            LiteralExpr::atom("y").into(),
-            LiteralExpr::atom("z").into(),
+            Term::atom("p").into(),
+            Term::atom("q").into(),
+            Term::atom("r").into(),
+            Term::atom("s").into(),
+            Term::atom("t").into(),
+            Term::atom("u").into(),
+            Term::atom("v").into(),
+            Term::atom("w").into(),
+            Term::atom("x").into(),
+            Term::atom("y").into(),
+            Term::atom("z").into(),
         ]).into();
         assert_eq!(expr.normalize_negations(), normalized);
     }
@@ -362,13 +362,13 @@ mod tests {
     fn normalize_negations_7() {
         let expr: Expr = ExprKind::Iff(
             ExprKind::Xor(
-                LiteralExpr::atom("a").into(),
-                LiteralExpr::atom("b").into(),
+                Term::atom("a").into(),
+                Term::atom("b").into(),
             ).into(),
             ExprKind::Not(
                 ExprKind::Iff(
-                    LiteralExpr::atom("a").into(),
-                    LiteralExpr::atom("b").into(),
+                    Term::atom("a").into(),
+                    Term::atom("b").into(),
                 ).into(),
             ).into(),
         ).into();
@@ -376,44 +376,44 @@ mod tests {
             ExprKind::Or(vec![
                 ExprKind::And(vec![
                     ExprKind::Or(vec![
-                        ExprKind::Not(LiteralExpr::atom("a").into()).into(),
-                        LiteralExpr::atom("b").into(),
+                        ExprKind::Not(Term::atom("a").into()).into(),
+                        Term::atom("b").into(),
                     ]).into(),
                     ExprKind::Or(vec![
-                        LiteralExpr::atom("a").into(),
-                        ExprKind::Not(LiteralExpr::atom("b").into()).into(),
+                        Term::atom("a").into(),
+                        ExprKind::Not(Term::atom("b").into()).into(),
                     ]).into(),
                 ]).into(),
                 ExprKind::And(vec![
                     ExprKind::Or(vec![
-                        LiteralExpr::atom("a").into(),
-                        LiteralExpr::atom("b").into(),
+                        Term::atom("a").into(),
+                        Term::atom("b").into(),
                     ]).into(),
                     ExprKind::Or(vec![
-                        ExprKind::Not(LiteralExpr::atom("a").into()).into(),
-                        ExprKind::Not(LiteralExpr::atom("b").into()).into(),
+                        ExprKind::Not(Term::atom("a").into()).into(),
+                        ExprKind::Not(Term::atom("b").into()).into(),
                     ]).into(),
                 ]).into(),
             ]).into(),
             ExprKind::Or(vec![
                 ExprKind::And(vec![
                     ExprKind::Or(vec![
-                        LiteralExpr::atom("a").into(),
-                        LiteralExpr::atom("b").into(),
+                        Term::atom("a").into(),
+                        Term::atom("b").into(),
                     ]).into(),
                     ExprKind::Or(vec![
-                        ExprKind::Not(LiteralExpr::atom("a").into()).into(),
-                        ExprKind::Not(LiteralExpr::atom("b").into()).into(),
+                        ExprKind::Not(Term::atom("a").into()).into(),
+                        ExprKind::Not(Term::atom("b").into()).into(),
                     ]).into(),
                 ]).into(),
                 ExprKind::And(vec![
                     ExprKind::Or(vec![
-                        ExprKind::Not(LiteralExpr::atom("a").into()).into(),
-                        LiteralExpr::atom("b").into(),
+                        ExprKind::Not(Term::atom("a").into()).into(),
+                        Term::atom("b").into(),
                     ]).into(),
                     ExprKind::Or(vec![
-                        LiteralExpr::atom("a").into(),
-                        ExprKind::Not(LiteralExpr::atom("b").into()).into(),
+                        Term::atom("a").into(),
+                        ExprKind::Not(Term::atom("b").into()).into(),
                     ]).into(),
                 ]).into(),
             ]).into()
@@ -425,12 +425,12 @@ mod tests {
     fn to_clauses_0() {
         let expr: Expr = ExprKind::Or(vec![
             ExprKind::And(vec![
-                LiteralExpr::atom("day").into(),
-                LiteralExpr::atom("night").into(),
+                Term::atom("day").into(),
+                Term::atom("night").into(),
             ]).into(),
             ExprKind::And(vec![
-                LiteralExpr::atom("love").into(),
-                LiteralExpr::atom("war").into(),
+                Term::atom("love").into(),
+                Term::atom("war").into(),
             ]).into()
         ]).into();
         // (day and night) or (love and war)

@@ -1,13 +1,11 @@
 use std::collections::btree_map::Entry;
-use indexmap::set::IndexSet;
 use std::fmt::Formatter;
 use std::fmt;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap};
 use itertools::Itertools;
 use std::cmp::Ordering;
 
-use crate::ast::{LiteralExpr, Substitution};
-use crate::prover::TermMap;
+use crate::ast::{Term, Substitution};
 
 /// A recursive macro that builds a clause from terms
 #[allow(unused_macros)]
@@ -44,27 +42,12 @@ macro_rules! clause {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Clause<'a> {
     /// sorted vector of `(variable_name, truth_value)`, no duplicate variable names
-    terms: Vec<(LiteralExpr<'a>, bool)>,
+    terms: Vec<(Term<'a>, bool)>,
 }
 
 pub struct ClauseBuilder<'a> {
-    terms: BTreeMap<LiteralExpr<'a>, bool>,
+    terms: BTreeMap<Term<'a>, bool>,
     is_tautology: bool,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-/// id's used to reference interned clauses
-pub struct ClauseId(pub usize);
-
-#[derive(Debug)]
-/// interns clauses, and provides lookup by variable and truth value
-pub struct ClosedClauseSet<'a> {
-    /// the set of all clauses we have encountered thus far
-    pub clauses: IndexSet<Clause<'a>>,
-    /// maps `(variable_name, truth_value)` to vectors of clauses,
-    /// which contain that `variable_name` with that `truth_value`
-    term_map_true: TermMap<'a>,
-    term_map_false: TermMap<'a>,
 }
 
 impl <'a> ClauseBuilder<'a> {
@@ -78,16 +61,16 @@ impl <'a> ClauseBuilder<'a> {
     /// Set a variable name to a specific truth-value, returning `self`, used in macros
     #[allow(dead_code)]
     pub fn set(mut self, var_name: &'a str, truth_value: bool) -> ClauseBuilder {
-        self.insert(LiteralExpr::atom(var_name), truth_value);
+        self.insert(Term::atom(var_name), truth_value);
         self
     }
-    pub fn set_lit(mut self, literal: LiteralExpr<'a>, truth_value: bool) -> ClauseBuilder {
+    pub fn set_lit(mut self, literal: Term<'a>, truth_value: bool) -> ClauseBuilder {
         self.insert(literal, truth_value);
         self
     }
     /// Inserts a specific variable name with its truth-value,
     /// returns `true` if a tautology is created
-    pub fn insert(&mut self, literal: LiteralExpr<'a>, truth_value: bool) {
+    pub fn insert(&mut self, literal: Term<'a>, truth_value: bool) {
         if self.is_tautology { return; }
         match self.terms.entry(literal) {
             Entry::Vacant(entry) => {
@@ -196,84 +179,10 @@ impl <'a> Clause<'a> {
     pub fn is_empty(&self) -> bool {
         self.terms.is_empty()
     }
-}
-
-impl <'a> ClosedClauseSet<'a> {
-    pub fn new() -> ClosedClauseSet<'a> {
-        ClosedClauseSet {
-            clauses: IndexSet::new(),
-            term_map_true: TermMap::new(),
-            term_map_false: TermMap::new(),
-        }
+    /// Iterates over underlying vector
+    pub fn iter(&self) -> impl Iterator<Item = &(Term<'a>, bool)> {
+        self.terms.iter()
     }
-    /// get all clauses who have have conflicts with `clause` under some unififer
-    pub fn possible_resolution_partners<'s>(&self, clause: &Clause<'a>) -> Vec<(ClauseId, Substitution<'a>)>
-        where 'a: 's
-    {
-        // count the number of times we visit each clause id
-        let mut result = Vec::new();
-        // iterate over the terms in `clause`
-        for (term, truth_value) in clause.terms.iter() {
-            // increment the count of each clause with the same name, but opposite truth_value
-            // get the terms for the *opposite* truth value
-            let term_map = if !*truth_value { &self.term_map_true } else { &self.term_map_false };
-            for (uses, sub) in term_map.unifies_with(term).into_iter() {
-                for clause_id in uses {
-                    let entry = (*clause_id, sub.clone());
-                    result.push(entry);
-                }
-            }
-        }
-        result
-    }
-    /// Returns a vector of all clauses we can get by applying unifying terms inside the clause
-    /// For instance:
-    ///    `{P($x), P($y), Q($x, $y)}` may be factored to:
-    ///     `{P($x), Q($x, $x)}` via `$y -> $x`
-    ///     `{P($y), Q($y, $y)}` via `$x -> $y`
-    pub fn factors(&self, clause: &Clause<'a>) -> Vec<Clause<'a>> {
-        // test pairwise for possible unifiers
-        let mut subs = Vec::new();
-        for (x, x_truth) in clause.terms.iter() {
-            for (y, y_truth) in clause.terms.iter() {
-                if *x_truth != *y_truth { continue; }
-                if let Some(sub) = x.unify(y) {
-                    if sub.is_empty() { continue; }
-                    subs.push(sub);
-                }
-            }
-        }
-        // apply each of those unifiers to our clause and reduce
-        subs.into_iter()
-            .filter_map(|sub| {
-                let mut builder = ClauseBuilder::new();
-                for (term, truth_value) in clause.terms.iter() {
-                    // apply the substitution and insert the term
-                    let mapped = term.substitute(&sub);
-                    builder.insert(mapped, *truth_value);
-                }
-                builder.finish() // tautologies will get filtered out
-            })
-            .collect::<Vec<_>>()
-    }
-    /// Inserts the clause, providing the index into the set
-    /// Does not search for resolutions and factoring yet
-    pub fn integrate_clause(&mut self, clause: Clause<'a>) -> ClauseId {
-        let (idx, _) = self.clauses.insert_full(clause);
-        let clause_id = ClauseId(idx);
-        let clause: &Clause = self.clauses.get_index(idx).expect("missing clause");
-        for (literal, truth_value) in clause.terms.iter() {
-            // lookup the literal, and insert a new reference
-            let term_map = if *truth_value { &mut self.term_map_true } else { &mut self.term_map_false };
-            term_map.update(literal, clause_id);
-        }
-        // println!("integrated new clause, clauses: {:#?}", self.clauses);
-        clause_id
-    }
-    pub fn get<'s>(&'s self, id: ClauseId) -> &'s Clause<'a> {
-        self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
-    }
-
 }
 
 
@@ -297,8 +206,3 @@ impl fmt::Debug for Clause<'_> {
     }
 }
 
-impl fmt::Debug for ClauseId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Clause {}", self.0)
-    }
-}

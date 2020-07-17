@@ -4,7 +4,7 @@ use crate::prover::{ClosedClauseSet, ClauseBuilder};
 use std::{fmt, iter};
 
 use crate::error::*;
-use crate::ast::{LiteralExpr};
+use crate::ast::{Term};
 
 /// A high level expression of first order terms
 #[derive(PartialEq, Eq, Clone)]
@@ -14,7 +14,7 @@ pub struct Expr<'a> {
 /// Represents type of expression and any associated data
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExprKind<'a> {
-    Literal(LiteralExpr<'a>),
+    Literal(Term<'a>),
     Not(Expr<'a>),
     If(Expr<'a>, Expr<'a>),
     Iff(Expr<'a>, Expr<'a>),

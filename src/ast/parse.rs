@@ -3,7 +3,7 @@ use pest::iterators::{Pair, Pairs};
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest_derive::*;
 
-use crate::ast::{Expr, ExprKind, LiteralExpr};
+use crate::ast::{Expr, ExprKind, Term};
 use crate::error::BoxedErrorTrait;
 use itertools::{Itertools, Position};
 
@@ -108,7 +108,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
 fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
     let expr = match pair.as_rule() {
         Rule::literal => {
-            LiteralExpr::atom(pair.as_str()).into()
+            Term::atom(pair.as_str()).into()
         }
         Rule::negation => {
             let inner = parse_expr(pair.into_inner())?;
@@ -160,7 +160,7 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
 }
 
 /// parses a predicate expression
-fn parse_predicate(mut pairs: Pairs<Rule>) -> Result<LiteralExpr, BoxedErrorTrait> {
+fn parse_predicate(mut pairs: Pairs<Rule>) -> Result<Term, BoxedErrorTrait> {
     let name = if let Some(p) = pairs.next() {
         p.as_str()
     } else {
@@ -171,7 +171,7 @@ fn parse_predicate(mut pairs: Pairs<Rule>) -> Result<LiteralExpr, BoxedErrorTrai
             parse_predicate(p.into_inner())
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let lit = LiteralExpr::predicate(name, args);
+    let lit = Term::predicate(name, args);
     Ok(lit)
 }
 
