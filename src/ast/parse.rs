@@ -119,7 +119,8 @@ fn parse_term<'a>(pair: Pair<'a, Rule>, symbols: &mut SymbolTable<'a>) -> Result
             if let Some(var_id) = symbols.var_id(name) {
                 Term::variable(var_id).into()
             } else {
-                Term::atom(name).into()
+                let fun_id = symbols.fun_id(name, 0); // constants are zero_arity functions
+                Term::atom(fun_id).into()
             }
         }
         Rule::negation => {
@@ -172,7 +173,7 @@ fn parse_term<'a>(pair: Pair<'a, Rule>, symbols: &mut SymbolTable<'a>) -> Result
 }
 
 /// parses a predicate expression
-fn parse_literal<'a>(mut pairs: Pairs<'a, Rule>, symbols: &mut SymbolTable<'a>) -> Result<Term<'a>, BoxedErrorTrait> {
+fn parse_literal<'a>(mut pairs: Pairs<'a, Rule>, symbols: &mut SymbolTable<'a>) -> Result<Term, BoxedErrorTrait> {
     // the name should be the first thing
     let p = if let Some(p) = pairs.next() {
         p
@@ -198,7 +199,8 @@ fn parse_literal<'a>(mut pairs: Pairs<'a, Rule>, symbols: &mut SymbolTable<'a>) 
                 parse_literal(p.into_inner(), symbols)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Term::predicate(name, args)
+        let fun_id = symbols.fun_id(name, args.len());
+        Term::predicate(fun_id, args)
     };
     Ok(term)
 }

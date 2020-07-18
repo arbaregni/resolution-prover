@@ -10,19 +10,19 @@ pub struct ClauseId(usize);
 
 #[derive(Debug)]
 /// interns clauses, and provides lookup by variable and truth value
-pub struct ClosedClauseSet<'a> {
+pub struct ClosedClauseSet {
     /// the set of all clauses we have encountered thus far
-    pub clauses: IndexSet<Clause<'a>>,
+    pub clauses: IndexSet<Clause>,
 
     /// retrieve terms that could be unifiable
-    term_tree: TermTree<'a>,
+    term_tree: TermTree,
 
     /// maps terms to their positive/negative occurrences in clauses
-    occurrences: HashMap<Term<'a>, Occurrences>
+    occurrences: HashMap<Term, Occurrences>
 }
 
-impl <'a> ClosedClauseSet<'a> {
-    pub fn new() -> ClosedClauseSet<'a> {
+impl ClosedClauseSet {
+    pub fn new() -> ClosedClauseSet {
         ClosedClauseSet {
             clauses: IndexSet::new(),
             term_tree: TermTree::new(),
@@ -34,7 +34,7 @@ impl <'a> ClosedClauseSet<'a> {
     ///    `{P($x), P($y), Q($x, $y)}` may be factored to:
     ///     `{P($x), Q($x, $x)}` via `$y -> $x`
     ///     `{P($y), Q($y, $y)}` via `$x -> $y`
-    pub fn factors(&self, clause: &Clause<'a>) -> Vec<Clause<'a>> {
+    pub fn factors(&self, clause: &Clause) -> Vec<Clause> {
         // test pairwise for possible unifiers
         let mut subs = Vec::new();
         for (x, x_truth) in clause.iter() {
@@ -61,7 +61,7 @@ impl <'a> ClosedClauseSet<'a> {
     }
     /// Inserts the clause, providing the index into the set
     /// Does not search for resolutions and factoring yet
-    pub fn integrate_clause(&mut self, clause: Clause<'a>) -> ClauseId {
+    pub fn integrate_clause(&mut self, clause: Clause) -> ClauseId {
         let (idx, _) = self.clauses.insert_full(clause);
         let clause_id = ClauseId(idx);
         let clause: &Clause = self.clauses.get_index(idx).expect("missing clause");
@@ -76,7 +76,7 @@ impl <'a> ClosedClauseSet<'a> {
         // println!("integrated new clause, clauses: {:#?}", self.clauses);
         clause_id
     }
-    pub fn get<'s>(&'s self, id: ClauseId) -> &'s Clause<'a> {
+    pub fn get<'s>(&'s self, id: ClauseId) -> &'s Clause {
         self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
     }
     pub fn has_contradiction(&mut self) -> bool {

@@ -37,9 +37,9 @@ mod tests {
         let givens = vec![
             "fire and ice"
         ];
-        let goal = "lukewarm-water";
+        let goal = "lukewarm_water";
         let success = service_proof_request(givens.as_slice(), goal).expect("should not error");
-        // we can say nothing about lukewarm-water
+        // we can say nothing about lukewarm_water
         assert_eq!(success, false);
     }
     #[test]
@@ -136,6 +136,14 @@ mod tests {
             "P(a)",
         ];
         let goal = "Q(a)";
+        let success = service_proof_request(givens.as_slice(), goal).expect("should not error");
+        assert_eq!(success, true);
+    }
+
+    #[test]
+    fn first_order_10() {
+        let givens = vec![];
+        let goal = "(forall x: forall y: P(x, y)) <=> (forall y: forall x: P(x, y))";
         let success = service_proof_request(givens.as_slice(), goal).expect("should not error");
         assert_eq!(success, true);
     }

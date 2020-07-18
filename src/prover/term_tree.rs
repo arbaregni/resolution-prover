@@ -5,9 +5,9 @@ use map_in_place::MapVecInPlace;
 
 /// Supports unification based lookup, using a discrimination tree
 #[derive(Debug, PartialEq, Eq)]
-pub struct TermTree<'a> {
+pub struct TermTree {
     /// All nodes in the discrimination trie
-    nodes: Vec<Node<'a>>,
+    nodes: Vec<Node>,
     skip_to_next: Vec<Vec<NodeId>>,
 }
 
@@ -15,14 +15,14 @@ pub struct TermTree<'a> {
 type NodeId = usize;
 
 #[derive(Debug, PartialEq, Eq)]
-enum Node<'a> {
-    Internal(HashMap<TermPattern<'a>, NodeId>),
-    Leaf(Vec<Term<'a>>),
+enum Node {
+    Internal(HashMap<TermPattern, NodeId>),
+    Leaf(Vec<Term>),
 }
 
-impl <'a> TermTree<'a> {
+impl TermTree {
     /// create an empty term map
-    pub fn new() -> TermTree<'a> {
+    pub fn new() -> TermTree {
         TermTree {
             nodes: vec![Node::new()],
             skip_to_next: vec![Vec::new()],
@@ -30,7 +30,7 @@ impl <'a> TermTree<'a> {
     }
     /// Updates the `TermMap` to include a new usage of `term`, creating an entry if it doesn't exist
     /// Expects to be called with increasing `clause_id`s
-    pub fn update(&mut self, term: Term<'a>) {
+    pub fn update(&mut self, term: Term) {
         // update the discrimination tree
         let mut arity_totals: Vec<(NodeId, usize)> = Vec::new(); // running total of the arity (used for determining subterm boundaries)
         let mut node_id = 0 as NodeId; // start at the root noot
@@ -71,10 +71,10 @@ impl <'a> TermTree<'a> {
     /// Returns at least all terms which are generalizations of `query_term`,
     /// A term `t` generalizes a query term `s` iff there exists a substitution σ such that σ(t) = s
     /// Further filtering is required
-    fn generalizations_of<'t>(&'t self, node_id: NodeId, to_check: &mut Vec<Term<'a>>, found: &mut Vec<Term<'a>>) {
+    fn generalizations_of<'t>(&'t self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut Vec<Term>) {
         match &self.nodes[node_id] {
             Node::Leaf(terms) => {
-                assert!(to_check.is_empty()); // due to fixed-arity functions, we expect the path sizes to be equal
+                assert!(to_check.is_empty()); // due to fixed_arity functions, we expect the path sizes to be equal
                 println!("finding: {:?}", terms);
                 found.extend_from_slice(terms.as_slice());
             },
@@ -99,10 +99,10 @@ impl <'a> TermTree<'a> {
     /// Returns at least all terms which are an instance of `query_term`
     /// A term `t` is an instance of a query term `s` iff there exists a substitution σ such that t = σ(s)
     /// Further filtering is required
-    fn instances_of<'t>(&'t self, node_id: NodeId, to_check: &mut Vec<Term<'a>>, found: &mut Vec<Term<'a>>) {
+    fn instances_of(&self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut Vec<Term>) {
         match &self.nodes[node_id] {
             Node::Leaf(terms) => {
-                assert!(to_check.is_empty()); // due to fixed-arity functions, we expect the path sizes to be equal
+                assert!(to_check.is_empty()); // due to fixed_arity functions, we expect the path sizes to be equal
                 found.extend_from_slice(terms.as_slice());
             }
             Node::Internal(map) => {
@@ -132,7 +132,7 @@ impl <'a> TermTree<'a> {
         }
     }
     /// Return an iterator with all references to clauses containing terms that unify with `term`
-    pub fn unification_candidates<'t>(&'t self, query_term: Term<'a>) -> Vec<Term<'a>> {
+    pub fn unification_candidates(&self, query_term: Term) -> Vec<Term> {
         // collect candidates here
         let mut found = Vec::new();
 
@@ -150,21 +150,21 @@ impl <'a> TermTree<'a> {
 
 }
 
-impl fmt::Debug for TermPattern<'_> {
+impl fmt::Debug for TermPattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TermPattern::Variable => write!(f, "*")?,
-            TermPattern::Function(name, arity) => write!(f, "{}^{}", name, arity)?,
+            TermPattern::Function(fun_id) => write!(f, "{:?}", fun_id)?,
         }
         Ok(())
     }
 }
 
-impl <'a> Node<'a> {
-    fn new() -> Node<'a> {
+impl Node {
+    fn new() -> Node {
         Node::Internal( HashMap::new() )
     }
-    fn get_or_insert(&mut self, num_nodes: NodeId, pattern: TermPattern<'a>) -> NodeId {
+    fn get_or_insert(&mut self, num_nodes: NodeId, pattern: TermPattern) -> NodeId {
         if let Node::Internal(ref mut map) = self {
             let node_id = map
                 .entry(pattern)
@@ -175,7 +175,7 @@ impl <'a> Node<'a> {
             unreachable!()
         }
     }
-    fn leafify(&mut self, term: Term<'a>) {
+    fn leafify(&mut self, term: Term) {
         if let Node::Leaf(ref mut terms) = self {
             terms.push(term);
             return;
@@ -184,6 +184,7 @@ impl <'a> Node<'a> {
         *self = Node::Leaf(vec![term]);
     }
 }
+
 
 /* TODO tests and benchmarks for TermTree
 

@@ -1,4 +1,4 @@
-use crate::ast::{Expr, ExprKind, VarId};
+use crate::ast::{Expr, ExprKind, VarId, FunId};
 use TermKind::*;
 
 use std::{fmt, iter};
@@ -8,19 +8,19 @@ use std::ops::Deref;
 
 /// A literal predicate expression, with no logical connectives
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Term<'a> {
-    kind: Rc<TermKind<'a>>
+pub struct Term {
+    kind: Rc<TermKind>
 }
 /// The kind of a literal expression (LiteralExpr wraps around this for now)
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum TermKind<'a> {
+pub enum TermKind {
     /// Variables are terms that may take on any value. They are produced by universal quantifiers
     Variable(VarId),
-    /// Functions are names and arguments. Constants are zero-arity functions
-    Function(&'a str, Vec<Term<'a>>),
+    /// Functions are names and arguments. Constants are zero_arity functions
+    Function(FunId, Vec<Term>),
 }
 /// Variable names are mapped to Literal Expressions
-pub type Substitution<'a> = HashMap<VarId, Term<'a>>;
+pub type Substitution = HashMap<VarId, Term>;
 
 /// The highest level pattern of a term.
 ///   For instance,
@@ -28,41 +28,43 @@ pub type Substitution<'a> = HashMap<VarId, Term<'a>>;
 /// as a function named `P` with one argument (arity 1).
 /// This is to enable unification based lookup
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub enum TermPattern<'a> {
-    /// Representing any
+pub enum TermPattern {
+    /// Representing any variable
     Variable,
     /// Representing a function with the given name and arity
-    Function(&'a str, usize),
+    Function(FunId),
 }
 
-/// Iterates over all expressions and sub-expressions in the given term
+/// Iterates over all expressions and sub_expressions in the given term
 #[derive(Debug, Clone)]
-pub struct SubTermIterator<'a> {
-    stack: Vec<Term<'a>>,
+pub struct SubTermIterator {
+    stack: Vec<Term>,
 }
 
-impl <'a> TermKind<'a> {
-    fn into_expr(self) -> Term<'a> {
+impl TermKind {
+    fn into_expr(self) -> Term {
         Term { kind: Rc::new(self) }
     }
 }
 
 const EMPTY_TERM_SLICE: &'static [Term] = &[];
 
-impl <'a> Term<'a> {
-    pub fn atom(name: &'a str) -> Term<'a> {
-        Function(name, Vec::new()).into_expr()
+impl Term {
+    pub fn atom(fun_id: FunId) -> Term {
+        Function(fun_id, vec![]).into_expr()
     }
-    pub fn predicate(name: &'a str, args: Vec<Term<'a>>) -> Term<'a> {
-        Function(name, args).into_expr()
+    pub fn predicate(fun_id: FunId, args: Vec<Term>) -> Term {
+        Function(fun_id, args).into_expr()
     }
-    pub fn variable(var_id: VarId) -> Term<'a> {
+    pub fn variable(var_id: VarId) -> Term {
         TermKind::Variable(var_id).into_expr()
     }
-    pub fn into(self) -> Expr<'a> {
+
+
+    pub fn into<'a>(self) -> Expr<'a> {
         ExprKind::Term(self).into()
     }
-    pub fn kind(&self) -> &TermKind<'a> {
+    pub fn kind(&self) -> &TermKind {
         &self.kind
     }
     /// Search for the variable name in our structure
@@ -72,13 +74,13 @@ impl <'a> Term<'a> {
             Function(_, args) => args.iter().any(|a| a.contains(var)),
         }
     }
-    pub fn pattern(&self) -> TermPattern<'a> {
+    pub fn pattern(&self) -> TermPattern {
         match self.kind() {
             TermKind::Variable(_) => TermPattern::Variable,
-            TermKind::Function(name, args) => TermPattern::Function(name, args.len()),
+            TermKind::Function(fun_id, _) => TermPattern::Function(*fun_id),
         }
     }
-    pub fn children(&self) -> &[Term<'a>] {
+    pub fn children(&self) -> &[Term] {
         match self.kind() {
             TermKind::Variable(_) => EMPTY_TERM_SLICE,
             TermKind::Function(_, args) => args.as_slice(),
@@ -97,13 +99,13 @@ impl <'a> Term<'a> {
             TermKind::Function(_, args) => args.len(),
         }
     }
-    pub fn iter(&self) -> SubTermIterator<'a> {
+    pub fn iter(&self) -> SubTermIterator {
         SubTermIterator {
             stack: vec![self.clone()]
         }
     }
     /// Perform the given substitution, producing a new literal expression
-    pub fn substitute(&self, sub: &Substitution<'a>) -> Term<'a> {
+    pub fn substitute(&self, sub: &Substitution) -> Term {
         match self.kind.deref() {
             Variable(name) => {
                 if let Some(lit) = sub.get(name) {
@@ -120,7 +122,7 @@ impl <'a> Term<'a> {
             }
         }
     }
-    pub fn unify(&self, other: &Term<'a>) -> Option<Substitution<'a>> {
+    pub fn unify(&self, other: &Term) -> Option<Substitution> {
         match (self.kind.deref(), other.kind.deref()) {
             (Variable(x), Variable(y)) => {
                 // substitute one variable for another
@@ -137,7 +139,7 @@ impl <'a> Term<'a> {
                 }
                 // substitute f(args) for x
                 let mut sub = Substitution::new();
-                sub.insert(*x, Function(f, args.clone()).into_expr());
+                sub.insert(*x, Function(*f, args.clone()).into_expr());
                 Some(sub)
             }
             (Function(f, args_f), Function(g, args_g)) => {
@@ -157,8 +159,8 @@ impl <'a> Term<'a> {
     }
 }
 
-impl <'a> iter::Iterator for SubTermIterator<'a> {
-    type Item = Term<'a>;
+impl iter::Iterator for SubTermIterator {
+    type Item = Term;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(term) = self.stack.pop() {
@@ -178,7 +180,7 @@ impl <'a> iter::Iterator for SubTermIterator<'a> {
 }
 
 /// if you performed `sub`, and then `new`, the result is `compose(sub, new)`
-fn compose<'a>(sub: Substitution<'a>, new: Substitution<'a>) -> Substitution<'a> {
+fn compose(sub: Substitution, new: Substitution) -> Substitution {
     let mut composition = Substitution::new();
     // perform the new substitution in all the existing mappings
     for (k, v) in sub.into_iter() {
@@ -192,12 +194,12 @@ fn compose<'a>(sub: Substitution<'a>, new: Substitution<'a>) -> Substitution<'a>
 }
 
 
-impl fmt::Debug for Term<'_> {
+impl fmt::Debug for Term {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.kind.deref() {
             Variable(name) => write!(f, "{:?}", name)?,
             Function(name, args) => {
-                write!(f, "{}", name)?;
+                write!(f, "{:?}", name)?;
                 if !args.is_empty() {
                     let mut first = true;
                     for arg in args {
@@ -225,14 +227,21 @@ mod tests {
 
     #[test]
     fn unify_0() {
-        let left = Function("a", vec![]).into_expr();
-        let right = Function("a", vec![]).into_expr();
+        let mut symbols = SymbolTable::new();
+        let a = symbols.make_fun();
+
+        let left = Function(a, vec![]).into_expr();
+        let right = Function(a, vec![]).into_expr();
         assert_eq!(left.unify(&right), Some(Substitution::new())); // tautology: a = a by definition
     }
     #[test]
     fn unify_1() {
-        let left = Function("a", vec![]).into_expr();
-        let right = Function("b", vec![]).into_expr();
+        let mut symbols = SymbolTable::new();
+        let a = symbols.make_fun();
+        let b = symbols.make_fun();
+
+        let left = Function(a, vec![]).into_expr();
+        let right = Function(b, vec![]).into_expr();
         assert_eq!(left.unify(&right), None); // a and b do not match
     }
     #[test]
@@ -248,13 +257,14 @@ mod tests {
     fn unify_3() {
         let mut symbols = SymbolTable::new();
         let x = symbols.make_var();
+        let a = symbols.make_fun();
 
-        let left = Function("a", vec![]).into_expr();
+        let left = Function(a, vec![]).into_expr();
         let right = Term::variable(x);
         let mgu = left.unify(&right);
 
         let mut sub = Substitution::new();
-        sub.insert(x, Term::atom("a")); // X := a
+        sub.insert(x, Term::atom(a)); // X := a
         assert_eq!(mgu, Some(sub));  // X is assigned constant a
     }
     #[test]
@@ -276,19 +286,22 @@ mod tests {
     fn unify_5() {
         let mut symbols = SymbolTable::new();
         let x = symbols.make_var();
+        let f = symbols.make_fun();
+        let a = symbols.make_fun();
+        let b = symbols.make_fun();
 
-        let left = Function("f", vec![
-            Function("a", vec![]).into_expr(),
+        let left = Function(f, vec![
+            Function(a, vec![]).into_expr(),
             Term::variable(x),
         ]).into_expr();
-        let right = Function("f", vec![
-            Function("a", vec![]).into_expr(),
-            Function("b", vec![]).into_expr(),
+        let right = Function(f, vec![
+            Function(a, vec![]).into_expr(),
+            Function(b, vec![]).into_expr(),
         ]).into_expr();
         let mgu = left.unify(&right);
 
         let mut sub = Substitution::new();
-        sub.insert(x, Function("b", vec![]).into_expr());
+        sub.insert(x, Function(b, vec![]).into_expr());
         assert_eq!(mgu, Some(sub));  // functions and constants match, X is assigned constant b
     }
     #[test]
@@ -296,11 +309,12 @@ mod tests {
         let mut symbols = SymbolTable::new();
         let x = symbols.make_var();
         let y = symbols.make_var();
+        let f = symbols.make_fun();
 
-        let left = Function("f", vec![
+        let left = Function(f, vec![
             Term::variable(x),
         ]).into_expr();
-        let right = Function("f", vec![
+        let right = Function(f, vec![
             Term::variable(y),
         ]).into_expr();
         let mgu = left.unify(&right);
@@ -314,11 +328,13 @@ mod tests {
         let mut symbols = SymbolTable::new();
         let x = symbols.make_var();
         let y = symbols.make_var();
+        let f = symbols.make_fun();
+        let g = symbols.make_fun();
 
-        let left = Function("f", vec![
+        let left = Function(f, vec![
             Term::variable(x),
         ]).into_expr();
-        let right = Function("g", vec![
+        let right = Function(g, vec![
             Term::variable(y),
         ]).into_expr();
         let mgu = left.unify(&right);
@@ -331,11 +347,13 @@ mod tests {
         let x = symbols.make_var();
         let y = symbols.make_var();
         let z = symbols.make_var();
+        let f1 = symbols.make_fun();
+        let f2 = symbols.make_fun();
 
-        let left = Function("f", vec![
+        let left = Function(f1, vec![
             Term::variable(x),
         ]).into_expr();
-        let right = Function("f", vec![
+        let right = Function(f2, vec![
             Term::variable(y),
             Term::variable(z),
         ]).into_expr();
@@ -346,20 +364,23 @@ mod tests {
     #[test]
     fn unify_9() {
         let mut symbols = SymbolTable::new();
-        let x = symbols.make_var();
+        let x= symbols.make_var();
+        let f = symbols.make_fun();
+        let a = symbols.make_fun();
+        let b = symbols.make_fun();
 
-        let left = Function("f", vec![
-            Function("a", vec![]).into_expr(),
+        let left = Function(f, vec![
+            Function(a, vec![]).into_expr(),
             Term::variable(x),
         ]).into_expr();
-        let right = Function("f", vec![
-            Function("a", vec![]).into_expr(),
-            Function("b", vec![]).into_expr(),
+        let right = Function(f, vec![
+            Function(a, vec![]).into_expr(),
+            Function(b, vec![]).into_expr(),
         ]).into_expr();
         let mgu = left.unify(&right);
 
         let mut sub = Substitution::new();
-        sub.insert(x, Function("b", vec![]).into_expr());
+        sub.insert(x, Function(b, vec![]).into_expr());
         assert_eq!(mgu, Some(sub));  // functions and constants match, X is assigned constant b
     }
     #[test]
@@ -367,19 +388,21 @@ mod tests {
         let mut symbols = SymbolTable::new();
         let x = symbols.make_var();
         let y = symbols.make_var();
+        let f = symbols.make_fun();
+        let g = symbols.make_fun();
 
-        let left = Function("f", vec![
-            Function("g", vec![
+        let left = Function(f, vec![
+            Function(g, vec![
                 Term::variable(x),
             ]).into_expr(),
         ]).into_expr();
-        let right = Function("f", vec![
+        let right = Function(f, vec![
             Term::variable(y),
         ]).into_expr();
         let mgu = left.unify(&right);
 
         let mut sub = Substitution::new();
-        sub.insert(y, Function("g", vec![
+        sub.insert(y, Function(g, vec![
             Term::variable(x)
         ]).into_expr());
         assert_eq!(mgu, Some(sub));  // y gets unified with the term g(x)
@@ -389,23 +412,26 @@ mod tests {
         let mut symbols = SymbolTable::new();
         let x = symbols.make_var();
         let y = symbols.make_var();
+        let f = symbols.make_fun();
+        let g = symbols.make_fun();
+        let a = symbols.make_fun();
 
-        let left = Function("f", vec![
-            Function("g", vec![
+        let left = Function(f, vec![
+            Function(g, vec![
                 Term::variable(x),
             ]).into_expr(),
             Term::variable(x),
         ]).into_expr();
-        let right = Function("f", vec![
+        let right = Function(f, vec![
             Term::variable(y),
-            Function("a", vec![]).into_expr()
+            Function(a, vec![]).into_expr()
         ]).into_expr();
         let mgu = left.unify(&right);
 
         let mut sub = Substitution::new();
-        sub.insert(x, Function("a", vec![]).into_expr());
-        sub.insert(y, Function("g", vec![
-            Function("a", vec![]).into_expr()
+        sub.insert(x, Function(a, vec![]).into_expr());
+        sub.insert(y, Function(g, vec![
+            Function(a, vec![]).into_expr()
         ]).into_expr());
 
         assert_eq!(mgu, Some(sub));  // x assigned to constant a, y assigned to term g(a)
@@ -414,11 +440,12 @@ mod tests {
     fn unify_12() {
         let mut symbols = SymbolTable::new();
         let x = symbols.make_var();
+        let f = symbols.make_fun();
 
         let left = Term::variable(x);
-        let right = Function("f", vec![
+        let right = Term::predicate(f, vec![
             Term::variable(x),
-        ]).into_expr();
+        ]);
         let mgu = left.unify(&right);
 
         assert_eq!(mgu, None);  // can not unify without infinite descent

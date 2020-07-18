@@ -72,7 +72,7 @@ fn about(ctx: &mut Context, msg: &Message, _args: Args) -> CommandResult {
                 .description(&format!("uses resolution to verify statements and proofs\nreacting means {} a proof is found, {} means no proof is found\n",
                                        PROVABLE_REACT, UNPROVABLE_REACT)
                 )
-                .url("https://github.com/arbaregni/resolution-prover")
+                .url("https://github.com/arbaregni/resolution_prover")
         })
     })?;
     Ok( () )

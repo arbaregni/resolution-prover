@@ -14,7 +14,7 @@ pub struct Expr<'a> {
 /// Represents type of expression and any associated data
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExprKind<'a> {
-    Term(Term<'a>),
+    Term(Term),
     Not(Expr<'a>),
     If(Expr<'a>, Expr<'a>),
     Iff(Expr<'a>, Expr<'a>),
@@ -36,6 +36,29 @@ impl <'a> Expr<'a> {
         ExprKind::Not(self).into()
     }
 
+
+    /// Perform the substitution on all our terms
+    fn substitute(self, sub: &Substitution) -> Expr<'a> {
+        match *self.kind {
+            ExprKind::Term(term) => {
+                // perform the substitution on the term
+                ExprKind::Term(term.substitute(sub)).into()
+            },
+            ExprKind::Not(inner) => ExprKind::Not(inner.substitute(sub)).into(),
+            ExprKind::If(a, b) => ExprKind::If(a.substitute(sub), b.substitute(sub)).into(),
+            ExprKind::Iff(a, b) => ExprKind::Iff(a.substitute(sub), b.substitute(sub)).into(),
+            ExprKind::Xor(a, b) => ExprKind::Xor(a.substitute(sub), b.substitute(sub)).into(),
+            ExprKind::Or(subexprs) => ExprKind::Or(subexprs.map_in_place(|subexpr| {
+                subexpr.substitute(sub)
+            })).into(),
+            ExprKind::And(subexprs) => ExprKind::And(subexprs.map_in_place(|subexpr| {
+                subexpr.substitute(sub)
+            })).into(),
+            ExprKind::Universal(_, _, _) | ExprKind::Existential(_, _, _) => {
+                unreachable!("can not substitute over quantifications")
+            }
+        }
+    }
     /// Replace implies with its definition,
     /// flattens all nested `And`s and `Or`s
     /// and move all `Not`s to immediately before atoms
@@ -191,13 +214,18 @@ impl <'a> Expr<'a> {
                 inner
             },
             ExprKind::Existential(_, var, inner) => {
-                todo!("skolemnification")
-                /*
+                // A skolem function is a replacement for an existentially quantified variable.
+                // For instance,
+                //     forall x: forall y: exists z: z = x + y
+                // Becomes:
+                //     forall x: forall y: f(x, y) = x + y, where f is a previously unseen symbol
                 let skolem_id = symbols.make_fun();
                 let skolem = Term::predicate(skolem_id, free_variables.clone());
+
+                // make the substitution
                 let mut sub = Substitution::new();
                 sub.insert(var, skolem);
-                */
+                inner.unquantify_helper(free_variables, symbols).substitute(&sub)
             },
             // recurse on sub expressions
             ExprKind::Term(_) => self, // no children
@@ -286,7 +314,7 @@ impl <'a> Expr<'a> {
     ///  - if any expr kind other than `Or`, `And`, `Not`, and `Literal` are present
     ///  - if `Not` surround anything but a `Literal`
     ///  - if `Or`s surround any `And`s
-    pub fn make_clause_set(self, clause_set: &mut ClosedClauseSet<'a>) -> Result<(), BoxedErrorTrait>{
+    pub fn make_clause_set(self, clause_set: &mut ClosedClauseSet) -> Result<(), BoxedErrorTrait>{
         // println!("making into a clause set: {:#?}", self);
         use ExprKind::*;
         match *self.kind {
@@ -300,21 +328,21 @@ impl <'a> Expr<'a> {
             }
             And(exprs) => {
                 // ands must be on the highest level
-                // we go through each of the sub-exprs and
+                // we go through each of the sub_exprs and
                 // add whatever clauses they produce
                 for expr in exprs {
                     expr.make_clause_set(clause_set)?;
                 }
             }
             _ => {
-                return internal_error!("calling make_clause helper on non-normalized expr {:?}", self);
+                return internal_error!("calling make_clause helper on non_normalized expr {:?}", self);
             }
         }
         Ok( () )
     }
     /// adds the current expression to the clause
     /// panicking if it can not be done (i.e. it was an `And` or `If`)
-    fn make_clause(self, builder: &mut ClauseBuilder<'a>) -> Result<(), BoxedErrorTrait> {
+    fn make_clause(self, builder: &mut ClauseBuilder) -> Result<(), BoxedErrorTrait> {
         use ExprKind::*;
         match *self.kind {
             Term(name) => {
@@ -324,7 +352,7 @@ impl <'a> Expr<'a> {
                 if let Term(name) = *inner.kind {
                     builder.insert(name, false);
                 } else {
-                    return internal_error!("calling make_clause helper on non-normalized expr Not({:?})", inner);
+                    return internal_error!("calling make_clause helper on non_normalized expr Not({:?})", inner);
                 }
             }
             Or(exprs) => {
@@ -333,7 +361,7 @@ impl <'a> Expr<'a> {
                 }
             }
             _ => {
-                return internal_error!("calling make_clause helper on non-normalized expr {:?}", self);
+                return internal_error!("calling make_clause helper on non_normalized expr {:?}", self);
             }
         };
         Ok( () )
@@ -341,7 +369,7 @@ impl <'a> Expr<'a> {
 
     /// Convert an expression to clausal normal form,
     /// inserting all new clauses into the clause set
-    pub fn into_clauses(self, symbols: &mut SymbolTable, clause_set: &mut ClosedClauseSet<'a>) -> Result<(), BoxedErrorTrait> {
+    pub fn into_clauses(self, symbols: &mut SymbolTable, clause_set: &mut ClosedClauseSet) -> Result<(), BoxedErrorTrait> {
         // println!("converting: {:?}", self);
         self
             .normalize_negations()

@@ -15,64 +15,58 @@ macro_rules! clause_builder {
         crate::prover::ClauseBuilder::new()
     };
     ($term:ident) => {
-        $crate::prover::ClauseBuilder::new().set( stringify!($term), true)
+        $crate::prover::ClauseBuilder::new().set( Term::atom($term), true )
     };
     ( ~ $term:ident) => {
-        crate::prover::ClauseBuilder::new().set( stringify!($term), false)
+        crate::prover::ClauseBuilder::new().set( Term::atom($term), false )
     };
     // the recursive, truthy case
     ( $term:ident, $($tail:tt)*) => {
-        clause_builder!( $($tail)+ ).set( stringify!($term), true)
+        clause_builder!( $($tail)+ ).set( Term::atom($term), true )
     };
     // the recursive, falsy case
     ( ~ $term:ident, $($tail:tt)*) => {
-        clause_builder!( $($tail)* ).set( stringify!($term), false)
+        clause_builder!( $($tail)* ).set( Term::atom($term), false )
     };
 }
 /// Creates and finishes a clause builder on the given terms
 #[macro_export]
 macro_rules! clause {
     ( $($term:tt)* ) => {
-        clause_builder!( $($term)* ).finish().expect("hard-coded tautology")
+        clause_builder!( $($term)* ).finish().expect("hard_coded tautology")
     }
 }
 
 /// Any number of terms, at least one of which is true
 /// (the empty clause, of course, represents paradox)
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Clause<'a> {
+pub struct Clause {
     /// sorted vector of `(variable_name, truth_value)`, no duplicate variable names
-    terms: Vec<(Term<'a>, bool)>,
+    terms: Vec<(Term, bool)>,
 }
 
-pub struct ClauseBuilder<'a> {
-    terms: BTreeMap<Term<'a>, bool>,
+pub struct ClauseBuilder {
+    terms: BTreeMap<Term, bool>,
     is_tautology: bool,
 }
 
-impl <'a> ClauseBuilder<'a> {
+impl ClauseBuilder {
     /// Creates the empty clause
-    pub fn new() -> ClauseBuilder<'a> {
+    pub fn new() -> ClauseBuilder {
         ClauseBuilder {
             terms: BTreeMap::new(),
             is_tautology: false
         }
     }
-    /// Set a variable name to a specific truth-value, returning `self`, used in macros
-    #[allow(dead_code)]
-    pub fn set(mut self, var_name: &'a str, truth_value: bool) -> ClauseBuilder {
-        self.insert(Term::atom(var_name), truth_value);
+    pub fn set(mut self, term: Term, truth_value: bool) -> ClauseBuilder {
+        self.insert(term, truth_value);
         self
     }
-    pub fn set_lit(mut self, literal: Term<'a>, truth_value: bool) -> ClauseBuilder {
-        self.insert(literal, truth_value);
-        self
-    }
-    /// Inserts a specific variable name with its truth-value,
+    /// Inserts a specific variable name with its truth_value,
     /// returns `true` if a tautology is created
-    pub fn insert(&mut self, literal: Term<'a>, truth_value: bool) {
+    pub fn insert(&mut self, term: Term, truth_value: bool) {
         if self.is_tautology { return; }
-        match self.terms.entry(literal) {
+        match self.terms.entry(term) {
             Entry::Vacant(entry) => {
                 entry.insert(truth_value);
             },
@@ -83,7 +77,7 @@ impl <'a> ClauseBuilder<'a> {
             },
         }
     }
-    pub fn finish(self) -> Option<Clause<'a>> {
+    pub fn finish(self) -> Option<Clause> {
         if self.is_tautology { return None; }
         let terms = self.terms
             .into_iter()
@@ -91,16 +85,16 @@ impl <'a> ClauseBuilder<'a> {
         Some(Clause { terms })
     }
 }
-impl <'a> Clause<'a> {
+impl Clause {
     /// apply the resolution rule to two clauses, which are guaranteed to have EXACTLY one conflict
-    /// the new clause contains all non-complementary terms
+    /// the new clause contains all non_complementary terms
     /// For example, suppose we have
     ///     `{p, q}` (p is true OR q is true)
     ///    `{~q, r}` (q is false OR r is true)
     /// Then, it must be the case that p is true, OR r is true,
     ///       and we don't know anything about q. This gives us:
     ///     `{p, r}` (p is true OR r is true)
-    pub fn resolve(&self, other: &Clause<'a>) -> Option<Clause<'a>> {
+    pub fn resolve(&self, other: &Clause) -> Option<Clause> {
         let sub = Substitution::new();
         self.resolve_under_substitution(other, &sub)
     }
@@ -114,7 +108,7 @@ impl <'a> Clause<'a> {
     ///    `{P(a)}`
     /// And resolution proceeds as normal, giving us:
     ///    `{Q(a)}`
-    pub fn resolve_under_substitution(&self, other: &Clause<'a>, sub: &Substitution<'a>) -> Option<Clause<'a>> {
+    pub fn resolve_under_substitution(&self, other: &Clause, sub: &Substitution) -> Option<Clause> {
         // we know at least one term will conflict, otherwise the new clause could have everything in both
         let capacity = self.terms.len() + other.terms.len() - 1;
         let mut resolvant_terms = Vec::with_capacity(capacity);
@@ -180,13 +174,13 @@ impl <'a> Clause<'a> {
         self.terms.is_empty()
     }
     /// Iterates over underlying vector
-    pub fn iter(&self) -> impl Iterator<Item = &(Term<'a>, bool)> {
+    pub fn iter(&self) -> impl Iterator<Item = &(Term, bool)> {
         self.terms.iter()
     }
 }
 
 
-impl fmt::Debug for Clause<'_> {
+impl fmt::Debug for Clause {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{{")?;
         let mut first = true;

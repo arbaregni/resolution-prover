@@ -62,79 +62,54 @@ mod tests {
     use crate::ast::{ExprKind, Term, SymbolTable};
 
     #[test]
-    fn clause_builder_0() {
-        let clause = ClauseBuilder::new()
-            .set("p", true)
-            .set("q", false)
-            .set("r", false)
-            .set("s", true)
-            .finish().expect("not a tautology");
-        assert_eq!(clause!(p, ~q, ~r, s), clause);
-    }
-    #[test]
-    fn clause_builder_1() {
-        let clause = ClauseBuilder::new()
-            .set("p", false)
-            .set("q", true)
-            .set("r", false)
-            .set("s", true)
-            .set("t", false)
-            .finish().expect("not a tautology");
-        assert_eq!(clause!(~p, q, ~r, s, ~t), clause);
-    }
-    #[test]
-    fn clause_builder_2() {
-        let clause = ClauseBuilder::new()
-            .finish().expect("not a tautology");
-        assert_eq!(clause!(), clause);
-    }
-
-    #[test]
     fn resolution_simple_0() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+        let r = symbols.make_fun();
+
         let a = clause!(p, q);
         let b = clause!(~q, r);
         assert_eq!(Clause::resolve(&a, &b), Some(clause!(p, r)));
     }
     #[test]
     fn resolution_simple_1() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+
         let a = clause!(~p, q); // equivalent to p -> q
         let b = clause!(p);
         assert_eq!(Clause::resolve(&a, &b), Some(clause!(q)));
     }
     #[test]
     fn resolution_simple_2() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+
         let a = clause!(p);
         let b = clause!(~p);
         assert_eq!(Clause::resolve(&a, &b), Some(clause!()));
     }
     #[test]
     fn resolution_simple_3() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+        let m = symbols.make_fun();
+
         let a = clause!(~m, p, q);
         let b = clause!(~p, q);
         assert_eq!(Clause::resolve(&a, &b), Some(clause!(~m, q)));
     }
 
     #[test]
-    fn builder_tautology_0() {
-        let opt_clause = ClauseBuilder::new()
-            .set("p", true)
-            .set("p", false)
-            .finish();
-        assert_eq!(opt_clause, None);
-    }
-    #[test]
-    fn builder_redundant_0() {
-        let opt_clause = ClauseBuilder::new()
-            .set("q", true)
-            .set("q", true)
-            .set("p", false)
-            .finish();
-        let expected = Some(clause!(~p, q));
-        assert_eq!(opt_clause, expected);
-    }
-
-    #[test]
     fn clause_intern_0() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+        let r = symbols.make_fun();
+
         let mut interner = ClosedClauseSet::new();
 
         let a = interner.integrate_clause(clause!(p, ~q, r));
@@ -153,6 +128,9 @@ mod tests {
     }
     #[test]
     fn satisfy_simple_1() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+
         let mut clause_set = ClosedClauseSet::new();
 
         clause_set.integrate_clause(clause!(p));
@@ -162,6 +140,10 @@ mod tests {
     }
     #[test]
     fn satisfy_simple_2() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+
         let mut clause_set = ClosedClauseSet::new();
 
         clause_set.integrate_clause(clause!(p, q)); // p or q
@@ -172,6 +154,10 @@ mod tests {
     }
     #[test]
     fn satisfy_simple_3() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+
         let mut clause_set= ClosedClauseSet::new();
 
         clause_set.integrate_clause(clause!(~p, q)); // p => q
@@ -182,6 +168,11 @@ mod tests {
     }
     #[test]
     fn satisfy_simple_4() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+        let r = symbols.make_fun();
+
         let mut clause_set  = ClosedClauseSet::new();
 
         clause_set.integrate_clause(clause!(~p, q));  // p => q
@@ -189,16 +180,21 @@ mod tests {
         clause_set.integrate_clause(clause!(p));      // p is true
         clause_set.integrate_clause(clause!(~r));     // r is false
 
-        assert_eq!(clause_set.has_contradiction(), true);        // there is a contradiction, because we can derive r
+        assert_eq!(clause_set.has_contradiction(), true);   // there is a contradiction, because we can derive r
     }
     #[test]
     fn satisfy_simple_5() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+        let r = symbols.make_fun();
+
         let mut clause_set = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(p, q));   // p or q
-        clause_set.integrate_clause(clause!(~p, r));  // not p or r
+        clause_set.integrate_clause(clause!( p,  q));   // p or q
+        clause_set.integrate_clause(clause!(~p,  r));  // not p or r
         clause_set.integrate_clause(clause!(~p, ~r)); // not p or not r
-        clause_set.integrate_clause(clause!(p, ~q));  // p or not q
+        clause_set.integrate_clause(clause!( p, ~q));  // p or not q
 
         // derivation of paradox:
         // (1) p or q       given
@@ -216,15 +212,18 @@ mod tests {
     fn satisfy_fol_0() {
         let mut symbols = SymbolTable::new();
         let x = symbols.make_var();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+        let a = symbols.make_fun();
 
         let mut clause_set = ClosedClauseSet::new();
 
         // P(x) implies Q(x)
         let clause = ClauseBuilder::new()
-            .set_lit(Term::predicate("P", vec![
+            .set(Term::predicate(p, vec![
                 Term::variable(x),
             ]), false)
-            .set_lit(Term::predicate("Q", vec![
+            .set(Term::predicate(q, vec![
                 Term::variable(x),
             ]), true)
             .finish().expect("not a tautology");
@@ -232,8 +231,8 @@ mod tests {
 
         // P(a)
         let clause = ClauseBuilder::new()
-            .set_lit(Term::predicate("P", vec![
-                Term::atom("a"),
+            .set(Term::predicate(p, vec![
+                Term::atom(a),
             ]), true)
             .finish().expect("not a tautology");
         clause_set.integrate_clause(clause);
@@ -242,8 +241,8 @@ mod tests {
 
         // make sure that we've derived what Q(a)
         let clause = ClauseBuilder::new()
-            .set_lit(Term::predicate("Q", vec![
-                Term::atom("a"),
+            .set(Term::predicate(q, vec![
+                Term::atom(a),
             ]), true)
             .finish().expect("not a tautology");
 
@@ -255,15 +254,17 @@ mod tests {
         let mut symbols = SymbolTable::new();
         let x = symbols.make_var();
         let y = symbols.make_var();
+        let p = symbols.make_fun();
+        let a = symbols.make_fun();
 
         let mut clause_set = ClosedClauseSet::new();
 
         // P(x) or P(y)
         let clause = ClauseBuilder::new()
-            .set_lit(Term::predicate("P", vec![
+            .set(Term::predicate(p, vec![
                 Term::variable(x),
             ]), true)
-            .set_lit(Term::predicate("P", vec![
+            .set(Term::predicate(p, vec![
                 Term::variable(y),
             ]), true)
             .finish().expect("not a tautology");
@@ -271,8 +272,8 @@ mod tests {
 
         // ~P(a)
         let clause = ClauseBuilder::new()
-            .set_lit(Term::predicate("P", vec![
-                Term::atom("a"),
+            .set(Term::predicate(p, vec![
+                Term::atom(a),
             ]), false)
             .finish().expect("not a tautology");
         clause_set.integrate_clause(clause);
@@ -295,34 +296,37 @@ mod tests {
         let w = symbols.make_var();
         let x = symbols.make_var();
 
+        let f = symbols.make_fun();
+        let p = symbols.make_fun();
+
         let clause_0 = ClauseBuilder::new()
-            .set_lit(Term::predicate("P", vec![
+            .set(Term::predicate(p, vec![
                 Term::variable(u)
             ]), true)
-            .set_lit(Term::predicate("P", vec![
-                Term::predicate("f", vec![
+            .set(Term::predicate(p, vec![
+                Term::predicate(f, vec![
                     Term::variable(u)
                 ])
             ]), true)
             .finish().expect("not a tautology");
         // ~P(v) or P(f(w))
         let clause_1 = ClauseBuilder::new()
-            .set_lit(Term::predicate("P", vec![
+            .set(Term::predicate(p, vec![
                 Term::variable(v)
             ]), false)
-            .set_lit(Term::predicate("P", vec![
-                Term::predicate("f", vec![
+            .set(Term::predicate(p, vec![
+                Term::predicate(f, vec![
                     Term::variable(w)
                 ])
             ]), true)
             .finish().expect("not a tautology");
         // ~P(x) or not P(f(x))
         let clause_2 = ClauseBuilder::new()
-            .set_lit(Term::predicate("P", vec![
+            .set(Term::predicate(p, vec![
                 Term::variable(x)
             ]), false)
-            .set_lit(Term::predicate("P", vec![
-                Term::predicate("f", vec![
+            .set(Term::predicate(p, vec![
+                Term::predicate(f, vec![
                     Term::variable(x)
                 ])
             ]), false)
@@ -349,19 +353,22 @@ mod tests {
     #[test]
     fn provability_simple_0() {
         let mut symbols = SymbolTable::new();
+        let it_rains = symbols.make_fun();
+        let get_wet = symbols.make_fun();
+        let will_fall = symbols.make_fun();
 
         let givens = vec![
             ExprKind::If(
-                Term::atom("it-rains").into(),
-                Term::atom("get-wet").into(),
+                Term::atom(it_rains).into(),
+                Term::atom(get_wet).into(),
             ).into(),
             ExprKind::If(
-                Term::atom("get-wet").into(),
-                Term::atom("will-fall").into(),
+                Term::atom(get_wet).into(),
+                Term::atom(will_fall).into(),
             ).into(),
-            Term::atom("it-rains").into(),
+            Term::atom(it_rains).into(),
         ];
-        let goal = Term::atom("will-fall").into();
+        let goal = Term::atom(will_fall).into();
 
         let success = find_proof(&mut symbols, givens, goal).expect("should not fail");
         assert_eq!(success, true);
@@ -369,20 +376,23 @@ mod tests {
     #[test]
     fn provability_simple_1() {
         let mut symbols = SymbolTable::new();
+        let it_rains = symbols.make_fun();
+        let get_wet = symbols.make_fun();
+        let will_fall = symbols.make_fun();
 
         let givens = vec![
             ExprKind::If(
-                Term::atom("it-rains").into(),    // if it-rains, you will get wet
-                Term::atom("get-wet").into(),
+                Term::atom(it_rains).into(),    // if it_rains, you will get wet
+                Term::atom(get_wet).into(),
             ).into(),
             ExprKind::If(
-                Term::atom("get-wet").into(),    // if you get wet, you will fall
-                Term::atom("will-fall").into(),
+                Term::atom(get_wet).into(),    // if you get wet, you will fall
+                Term::atom(will_fall).into(),
             ).into(),
         ];
-        let goal = ExprKind::If( // therefore, if it-rains, you will fall
-            Term::atom("it-rains").into(),
-                                 Term::atom("will-fall").into(),
+        let goal = ExprKind::If( // therefore, if it_rains, you will fall
+            Term::atom(it_rains).into(),
+                                 Term::atom(will_fall).into(),
         ).into();
 
         let success = find_proof(&mut symbols, givens, goal).expect("should not fail");
@@ -391,18 +401,21 @@ mod tests {
     #[test]
     fn provability_simple_2() {
         let mut symbols = SymbolTable::new();
+        let it_rains = symbols.make_fun();
+        let get_wet = symbols.make_fun();
+        let will_fall = symbols.make_fun();
 
         let givens = vec![
             ExprKind::If(
-                Term::atom("it-rains").into(),    // if it-rains, you will get wet
-                Term::atom("get-wet").into(),
+                Term::atom(it_rains).into(),    // if it_rains, you will get wet
+                Term::atom(get_wet).into(),
             ).into(),
             ExprKind::If(
-                Term::atom("get-wet").into(),    // if you get wet, you will fall
-                Term::atom("will-fall").into(),
+                Term::atom(get_wet).into(),    // if you get wet, you will fall
+                Term::atom(will_fall).into(),
             ).into(),
         ];
-        let goal = Term::atom("will-fall").into();
+        let goal = Term::atom(will_fall).into();
 
         let success = find_proof(&mut symbols, givens, goal).expect("should not fail");
         assert_eq!(success, false); // we can't prove definitely that you will fall
@@ -410,24 +423,27 @@ mod tests {
     #[test]
     fn provability_simple_3() {
         let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+        let zeta = symbols.make_fun();
 
         let givens = vec![
             ExprKind::Or(vec![
-                Term::atom("p").into(),
+                Term::atom(p).into(),
                 ExprKind::Not(
-                    Term::atom("q").into(),
+                    Term::atom(q).into(),
                 ).into(),
              ]).into(),
             ExprKind::Or(vec![
-                Term::atom("q").into(),
+                Term::atom(q).into(),
                 ExprKind::Not(
-                    Term::atom("p").into(),
+                    Term::atom(p).into(),
                 ).into(),
             ]).into(),
         ];
         // this is a consistent set of givens
         // we should NOT be able to prove an arbitrary formula
-        let goal = Term::atom("zeta").into();
+        let goal = Term::atom(zeta).into();
 
         let success = find_proof(&mut symbols, givens, goal).expect("should not error");
         assert_eq!(success, false);
@@ -436,74 +452,84 @@ mod tests {
     #[test]
     fn provability_medium_0() {
         let mut symbols = SymbolTable::new();
+        let it_rains = symbols.make_fun();
+        let get_wet = symbols.make_fun();
+        let it_lightnings = symbols.make_fun();
+        let it_thunders = symbols.make_fun();
+        let will_be_scared = symbols.make_fun();
+        let will_fall = symbols.make_fun();
+        let it_hails = symbols.make_fun();
+        let it_snows = symbols.make_fun();
+        let will_be_slippery = symbols.make_fun();
+        let clear_skies = symbols.make_fun();
 
         let givens = vec![
             // if it rains, you will get wet
             ExprKind::If(
-                Term::atom("it-rains").into(),
-                Term::atom("get-wet").into(),
+                Term::atom(it_rains).into(),
+                Term::atom(get_wet).into(),
             ).into(),
             // if you get wet, you will fall
             ExprKind::If(
-                Term::atom("get-wet").into(),
-                Term::atom("will-fall").into(),
+                Term::atom(get_wet).into(),
+                Term::atom(will_fall).into(),
             ).into(),
             // if it lightnings, you will be scared
             ExprKind::If(
-                Term::atom("it-lightnings").into(),
-                Term::atom("will-be-scared").into(),
+                Term::atom(it_lightnings).into(),
+                Term::atom(will_be_scared).into(),
             ).into(),
             // if you're scared, you will fall
             ExprKind::If(
-                Term::atom("will-be-scared").into(),
-                Term::atom("will-fall").into(),
+                Term::atom(will_be_scared).into(),
+                Term::atom(will_fall).into(),
             ).into(),
             // if it hails or snows, you will be slippery
             ExprKind::If(
                 ExprKind::Or(vec![
-                    Term::atom("it-hails").into(),
-                    Term::atom("it-snows").into(),
+                    Term::atom(it_hails).into(),
+                    Term::atom(it_snows).into(),
                 ]).into(),
-                Term::atom("will-be-slippery").into(),
+                Term::atom(will_be_slippery).into(),
             ).into(),
             // if you're slippery, you will fall
             ExprKind::If(
-                Term::atom("will-be-slippery").into(),
-                Term::atom("will-fall").into(),
+                Term::atom(will_be_slippery).into(),
+                Term::atom(will_fall).into(),
             ).into(),
             // one of these will happen
             ExprKind::Or(vec![
                 // it will rain, ...
-                Term::atom("it-rains").into(),
+                Term::atom(it_rains).into(),
                 // or will be clear skies, ...
-                Term::atom("clear-skies").into(),
+                Term::atom(clear_skies).into(),
                 // or, will be one of these:
                 ExprKind::Or(vec![
                     // all of these will happen:
                     ExprKind::And(vec![
                         // it rains, ...
-                        Term::atom("it-rains").into(),
+                        Term::atom(it_rains).into(),
                         // and, if it rains, it thunders, ...
                         ExprKind::If(
-                            Term::atom("it-rains").into(),
-                            Term::atom("it-thunders").into(),
+                            Term::atom(it_rains).into(),
+                            Term::atom(it_thunders).into(),
                         ).into(),
                         // and, if it thunders, it lightnings
                         ExprKind::If(
-                            Term::atom("it-thunders").into(),
-                            Term::atom("it-lightnings").into(),
+                            Term::atom(it_thunders).into(),
+                            Term::atom(it_lightnings).into(),
                         ).into()
                     ]).into(),
                     // or, it will hail
-                    Term::atom("it-hails").into(),
+                    Term::atom(it_hails).into(),
                     // or, it will snow
-                    Term::atom("it-snows").into(),
+                    Term::atom(it_snows).into(),
                 ]).into()
             ]).into(),
         ];
         let goal = ExprKind::Or(vec![
-            Term::atom("clear-skies").into(),
-            Term::atom("will-fall").into()
+            Term::atom(clear_skies).into(),
+            Term::atom(will_fall).into()
         ]).into();
         let success = find_proof(&mut symbols, givens, goal).expect("should not error");
         assert_eq!(success, true);
