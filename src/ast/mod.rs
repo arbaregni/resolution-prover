@@ -1,3 +1,6 @@
+mod symbols;
+pub use symbols::*;
+
 mod literal;
 pub use literal::*;
 
@@ -10,42 +13,40 @@ pub use parse::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{ExprKind, parse, Term, Expr};
+    use crate::ast::{ExprKind, Term, Expr, SymbolTable};
     use crate::prover::ClosedClauseSet;
     use crate::ast;
 
     #[test]
     fn parse_simple_0() {
         let source = "llama";
-        let expr = parse(source).expect("should not error");
+        let (_symbols, expr) = ast::parse(source).expect("should not error");
         assert_eq!(expr, Term::atom("llama").into())
     }
     #[test]
     fn parse_simple_1() {
         let source = "sweet or sour or something";
-        let expr = parse(source).expect("should not error");
+        let (_symbols, expr) = ast::parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::Or(vec![
             Term::atom("sweet").into(),
             Term::atom("sour").into(),
             Term::atom("something").into(),
-        ]).into()
-        )
+        ]).into())
     }
     #[test]
     fn parse_simple_2() {
         let source = "hot and spicy and something";
-        let expr = parse(source).expect("should not error");
+        let (_symbols, expr) = ast::parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::And(vec![
             Term::atom("hot").into(),
             Term::atom("spicy").into(),
             Term::atom("something").into(),
-        ]).into()
-        )
+        ]).into())
     }
     #[test]
     fn parse_simple_3() {
         let source = "tasty implies good";
-        let expr = parse(source).expect("should not error");
+        let (_symbols, expr) = ast::parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::If(
             Term::atom("tasty").into(),
             Term::atom("good").into(),
@@ -55,7 +56,7 @@ mod tests {
     #[test]
     fn parse_simple_4() {
         let source = "not pleasant";
-        let expr = parse(source).expect("should not error");
+        let (_symbols, expr) = ast::parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::Not(
             Term::atom("pleasant").into()
         ).into())
@@ -63,7 +64,7 @@ mod tests {
     #[test]
     fn parse_simple_5() {
         let source = "p iff q";
-        let expr = parse(source).expect("should not error");
+        let (_symbols, expr) = ast::parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::Iff(
             Term::atom("p").into(),
             Term::atom("q").into(),
@@ -72,7 +73,7 @@ mod tests {
     #[test]
     fn parse_simple_6() {
         let source = "p xor q";
-        let expr = parse(source).expect("should not error");
+        let (_symbols, expr) = ast::parse(source).expect("should not error");
         assert_eq!(expr, ExprKind::Xor(
             Term::atom("p").into(),
             Term::atom("q").into(),
@@ -82,34 +83,28 @@ mod tests {
     #[test]
     fn parse_failure_0() {
         let source = "if and when";
-        let _ = parse(source).expect_err("`if` is reserved and should error");
+        let _ = ast::parse(source).expect_err("`if` is reserved and should error");
     }
     #[test]
     fn parse_failure_1() {
         let source = "this implies that implies something";
-        let _ = parse(source).expect_err("implies can not be chained");
+        let _ = ast::parse(source).expect_err("implies can not be chained");
     }
     #[test]
     fn parse_failure_2() {
         let source = "red and blue or green and orange";
-        let _ = parse(source).expect_err("ambigious operators not allowed");
+        let _ = ast::parse(source).expect_err("ambigious operators not allowed");
     }
     #[test]
     fn parse_failure_3() {
         let source = "x or and";
-        let _ = parse(source).expect_err("should reject a reserved word in this position");
+        let _ = ast::parse(source).expect_err("should reject a reserved word in this position");
     }
 
     #[test]
     fn parse_nested_0() {
         let source = "(red and blue) or (green and orange)";
-        let expr = match parse(source) {
-            Ok(expr) => expr,
-            Err(why) => {
-                eprintln!("{}", why);
-                panic!("`{}` should parse", source);
-            }
-        };
+        let (_symbols, expr) = ast::parse(source).expect("should parse");
         assert_eq!(expr, ExprKind::Or(vec![
             ExprKind::And(vec![
                 Term::atom("red").into(),
@@ -124,13 +119,7 @@ mod tests {
     #[test]
     fn parse_nested_1() {
         let source = "red and (blue or green) and orange";
-        let expr = match parse(source) {
-            Ok(expr) => expr,
-            Err(why) => {
-                eprintln!("{}", why);
-                panic!("`{}` should parse", source);
-            }
-        };
+        let (_symbols, expr) = ast::parse(source).expect("should parse");
         assert_eq!(expr, ExprKind::And(vec![
             Term::atom("red").into(),
             ExprKind::Or(vec![
@@ -143,13 +132,7 @@ mod tests {
     #[test]
     fn parse_nested_2() {
         let source = "((ace implies king) or (king implies ace)) and not ( (ace implies king) and (king implies ace) )";
-        let expr = match parse(source) {
-            Ok(expr) => expr,
-            Err(why) => {
-                eprintln!("{}", why);
-                panic!("`{}` should parse", source);
-            }
-        };
+        let (_symbols, expr) = ast::parse(source).expect("should parse");
         assert_eq!(expr, ExprKind::And(vec![
             ExprKind::Or(vec![
                 ExprKind::If(
@@ -423,6 +406,8 @@ mod tests {
 
     #[test]
     fn to_clauses_0() {
+        let mut symbols = SymbolTable::new();
+
         let expr: Expr = ExprKind::Or(vec![
             ExprKind::And(vec![
                 Term::atom("day").into(),
@@ -437,7 +422,7 @@ mod tests {
         // (day or (love and war)) and (night or (love and war))
         // (day or love) and (day or war) and (night or love) and (night or war)
         let mut clause_set  = ClosedClauseSet::new();
-        expr.into_clauses(&mut clause_set).expect("should not fail");
+        expr.into_clauses(&mut symbols, &mut clause_set).expect("should not fail");
 
         assert_eq!(clause_set.clauses.len(), 4);
         assert!(clause_set.clauses.contains( &clause!(day, love) ));
@@ -447,10 +432,10 @@ mod tests {
     }
     #[test]
     fn to_clauses_1() {
-        let expr = ast::parse("((a => b) and (b => c)) => (a => c)").expect("should not fail");
+        let (mut symbols, expr) = ast::parse("((a => b) and (b => c)) => (a => c)").expect("should not fail");
 
         let mut clause_set  = ClosedClauseSet::new();
-        expr.into_clauses(&mut clause_set).expect("should not error");
+        expr.into_clauses(&mut symbols, &mut clause_set).expect("should not error");
 
         assert_eq!(clause_set.clauses.len(), 0);
     }

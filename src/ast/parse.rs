@@ -6,22 +6,29 @@ use pest_derive::*;
 use crate::ast::{Expr, ExprKind, Term};
 use crate::error::BoxedErrorTrait;
 use itertools::{Itertools, Position};
+use crate::ast::symbols::SymbolTable;
 
 
 #[derive(Parser)]
 #[grammar = "../grammar.pest"]
 struct Grammar;
 
-pub fn parse(source: &str) -> Result<Expr<'_>, BoxedErrorTrait> {
+pub fn parse(source: &str) -> Result<(SymbolTable, Expr), BoxedErrorTrait> {
+    let mut symbols = SymbolTable::new();
+    let expr = parse_with_symbols(source, &mut symbols)?;
+    Ok( (symbols, expr) )
+}
+
+pub fn parse_with_symbols<'a>(source: &'a str, symbols: &mut SymbolTable<'a>) -> Result<Expr<'a>, BoxedErrorTrait> {
     // pest (essentially) tokenizes it for us,
     // all we have to do is deal with operator precedence
     // and converting into Expr structs
     let pairs = Grammar::parse(Rule::source, source).map_err(|e| explain_reserved(source, e))?;
-    let expr = parse_expr(pairs)?;
+    let expr = parse_expr(pairs, symbols)?;
     Ok(expr)
 }
 
-fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
+fn parse_expr<'a>(pairs: Pairs<'a, Rule>, symbols: &mut SymbolTable<'a>) -> Result<Expr<'a>, BoxedErrorTrait> {
     let mut operator = None; // we don't have an operator yet
     let mut terms = vec![];
     for pair in pairs {
@@ -51,7 +58,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
             }
             _ => {
                 // not an operator, it is a term
-                terms.push(parse_term(pair)?);
+                terms.push(parse_term(pair, symbols)?);
             }
         }
     }
@@ -105,19 +112,24 @@ fn parse_expr(pairs: Pairs<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
     Ok(expr)
 }
 
-fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
+fn parse_term<'a>(pair: Pair<'a, Rule>, symbols: &mut SymbolTable<'a>) -> Result<Expr<'a>, BoxedErrorTrait> {
     let expr = match pair.as_rule() {
         Rule::literal => {
-            Term::atom(pair.as_str()).into()
+            let name = pair.as_str();
+            if let Some(var_id) = symbols.var_id(name) {
+                Term::variable(var_id).into()
+            } else {
+                Term::atom(name).into()
+            }
         }
         Rule::negation => {
-            let inner = parse_expr(pair.into_inner())?;
+            let inner = parse_expr(pair.into_inner(), symbols)?;
             ExprKind::Not(inner).into()
         }
         Rule::parenthetical => {
-            parse_expr(pair.into_inner())?
+            parse_expr(pair.into_inner(), symbols)?
         }
-        Rule::pred => parse_predicate(pair.into_inner())?.into(),
+        Rule::pred => parse_literal(pair.into_inner(), symbols)?.into(),
         Rule::quantified => {
             let mut iter = pair.into_inner();
             let quantifier = if let Some(quantifier) = iter.next() {
@@ -125,22 +137,22 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
             } else {
                 return internal_error!("quantified missing its quantifier")
             };
-            let variable = if let Some(variable) = iter.next() {
-                variable.as_str()
+            let name = if let Some(name_pair) = iter.next() {
+                name_pair.as_str()
             } else {
                 return internal_error!("quantified missing its variable")
             };
-            let expr = if let Some(inner) = iter.next() {
-                parse_expr(inner.into_inner())?
-            } else {
-                return internal_error!("quantified missing its inner");
-            };
+            // bind the name to a variable, but only in our subscope
+            let (var, shadow_info) = symbols.shadow_var(name);
+            let expr = parse_expr(iter, symbols)?;
+            symbols.restore_binding(shadow_info);
+
             match quantifier {
                 Rule::univ => {
-                    ExprKind::Universal(variable, expr).into()
+                    ExprKind::Universal(name, var, expr).into()
                 },
                 Rule::exis => {
-                    ExprKind::Existential(variable, expr).into()
+                    ExprKind::Existential(name, var, expr).into()
                 },
                 _ => return internal_error!("unexpected quantifier {:?}", quantifier)
             }
@@ -148,31 +160,47 @@ fn parse_term(pair: Pair<Rule>) -> Result<Expr<'_>, BoxedErrorTrait> {
         // we're not expecting operators or arguments or EOI here
          Rule::arg | Rule::univ | Rule::exis | Rule::operator
         | Rule::or | Rule::and | Rule::implies | Rule::xor | Rule::bicond | Rule::EOI => {
-            return internal_error!("unexpected operator or EOI {} in parse_term", pair.as_str());
+             return internal_error!("unexpected operator or EOI `{}` in parse_term", pair.as_str());
         }
         // silent rules produce nothing
           Rule::WHITESPACE | Rule::reserved
         | Rule::expr | Rule::source | Rule::term | Rule::not => {
-              return internal_error!("rule {:?} should produce nothing", pair.as_rule());
+             return internal_error!("rule {:?} should produce nothing", pair.as_rule());
           }
     };
     Ok(expr)
 }
 
 /// parses a predicate expression
-fn parse_predicate(mut pairs: Pairs<Rule>) -> Result<Term, BoxedErrorTrait> {
-    let name = if let Some(p) = pairs.next() {
-        p.as_str()
+fn parse_literal<'a>(mut pairs: Pairs<'a, Rule>, symbols: &mut SymbolTable<'a>) -> Result<Term<'a>, BoxedErrorTrait> {
+    // the name should be the first thing
+    let p = if let Some(p) = pairs.next() {
+        p
     } else {
-        return internal_error!("predicate missing name");
+        return internal_error!("predicate missing name")
     };
-    let args = pairs
-        .map(|p| {
-            parse_predicate(p.into_inner())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let lit = Term::predicate(name, args);
-    Ok(lit)
+    let name = p.as_str();
+    let term = if let Some(var_id) = symbols.var_id(name) {
+        if pairs.next().is_some() {
+            // this is an error at the level of first order logic:
+            // predicates can not be variable
+            let variant: ErrorVariant<Rule> = ErrorVariant::CustomError {
+                message: format!("can not use `{}` as a predicate name because it is also bound as a variable (see second order logic)", name)
+            };
+            let err = Error::new_from_span(variant, p.as_span());
+            return Err(Box::new(err) as BoxedErrorTrait);
+        }
+        Term::variable(var_id)
+    } else {
+        // for a function, the remaining pairs are our arguments
+        let args = pairs
+            .map(|p| {
+                parse_literal(p.into_inner(), symbols)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Term::predicate(name, args)
+    };
+    Ok(term)
 }
 
 /// updates the error so that reserved words are mentioned in the error message
@@ -211,6 +239,6 @@ fn explain_reserved(source: &str, mut error: Error<Rule>) -> Error<Rule> {
             }
         }
     };
-    error.variant = ErrorVariant::CustomError{ message: msg };
+    error.variant = ErrorVariant::CustomError { message: msg };
     error
 }

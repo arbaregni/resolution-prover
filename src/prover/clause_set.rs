@@ -1,12 +1,12 @@
 use crate::prover::{Clause, TermTree, ClauseBuilder};
 use indexmap::set::IndexSet;
 use std::collections::HashMap;
-use crate::ast::{Term, Substitution};
+use crate::ast::{Term};
 use std::fmt;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 /// id's used to reference interned clauses
-pub struct ClauseId(pub usize);
+pub struct ClauseId(usize);
 
 #[derive(Debug)]
 /// interns clauses, and provides lookup by variable and truth value

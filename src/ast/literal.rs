@@ -1,7 +1,8 @@
-use std::{fmt, iter};
-use crate::ast::{Expr, ExprKind};
-use std::collections::HashMap;
+use crate::ast::{Expr, ExprKind, VarId};
 use TermKind::*;
+
+use std::{fmt, iter};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::ops::Deref;
 
@@ -14,16 +15,12 @@ pub struct Term<'a> {
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TermKind<'a> {
     /// Variables are terms that may take on any value. They are produced by universal quantifiers
-    Variable(VarId<'a>),
+    Variable(VarId),
     /// Functions are names and arguments. Constants are zero-arity functions
     Function(&'a str, Vec<Term<'a>>),
 }
 /// Variable names are mapped to Literal Expressions
-pub type Substitution<'a> = HashMap<VarId<'a>, Term<'a>>;
-
-/// For our purposes, we want all variables to be equal in the hash map
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
-pub struct VarId<'a>(pub &'a str);
+pub type Substitution<'a> = HashMap<VarId, Term<'a>>;
 
 /// The highest level pattern of a term.
 ///   For instance,
@@ -59,11 +56,11 @@ impl <'a> Term<'a> {
     pub fn predicate(name: &'a str, args: Vec<Term<'a>>) -> Term<'a> {
         Function(name, args).into_expr()
     }
-    pub fn variable(name: &'a str) -> Term<'a> {
-        TermKind::Variable(VarId(name)).into_expr()
+    pub fn variable(var_id: VarId) -> Term<'a> {
+        TermKind::Variable(var_id).into_expr()
     }
     pub fn into(self) -> Expr<'a> {
-        ExprKind::Literal(self).into()
+        ExprKind::Term(self).into()
     }
     pub fn kind(&self) -> &TermKind<'a> {
         &self.kind
@@ -194,16 +191,11 @@ fn compose<'a>(sub: Substitution<'a>, new: Substitution<'a>) -> Substitution<'a>
     composition
 }
 
-impl fmt::Debug for VarId<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "${}", self.0)
-    }
-}
 
 impl fmt::Debug for Term<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.kind.deref() {
-            Variable(name) => write!(f, "${}", name.0)?,
+            Variable(name) => write!(f, "{:?}", name)?,
             Function(name, args) => {
                 write!(f, "{}", name)?;
                 if !args.is_empty() {
@@ -228,8 +220,8 @@ impl fmt::Debug for Term<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::TermKind::{Function, Variable};
-    use crate::ast::{Substitution, Term, VarId};
+    use crate::ast::TermKind::{Function};
+    use crate::ast::{Substitution, Term, SymbolTable};
 
     #[test]
     fn unify_0() {
@@ -245,128 +237,190 @@ mod tests {
     }
     #[test]
     fn unify_2() {
-        let left = Term::variable("X");
-        let right = Term::variable("X");
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+
+        let left = Term::variable(x);
+        let right = Term::variable(x);
         assert_eq!(left.unify(&right), Some(Substitution::new())); // tautology: X = X by definition
     }
     #[test]
     fn unify_3() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+
         let left = Function("a", vec![]).into_expr();
-        let right = Term::variable("X");
+        let right = Term::variable(x);
+        let mgu = left.unify(&right);
+
         let mut sub = Substitution::new();
-        sub.insert(VarId("X"), Term::atom("a"));
-        assert_eq!(left.unify(&right), Some(sub));  // X is assigned constant a
+        sub.insert(x, Term::atom("a")); // X := a
+        assert_eq!(mgu, Some(sub));  // X is assigned constant a
     }
     #[test]
     fn unify_4() {
-        let left = Term::variable("X");
-        let right = Term::variable("Y");
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+
+        let left = Term::variable(x);
+        let right = Term::variable(y);
+        let mgu = left.unify(&right);
+
         let mut sub = Substitution::new();
-        sub.insert(VarId("X"), Term::variable("Y"));
-        assert_eq!(left.unify(&right), Some(sub)); // X and Y alias
+        sub.insert(x, Term::variable(y));
+
+        assert_eq!(mgu, Some(sub)); // X and Y alias
     }
     #[test]
     fn unify_5() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+
         let left = Function("f", vec![
             Function("a", vec![]).into_expr(),
-            Term::variable("X"),
+            Term::variable(x),
         ]).into_expr();
         let right = Function("f", vec![
             Function("a", vec![]).into_expr(),
             Function("b", vec![]).into_expr(),
         ]).into_expr();
+        let mgu = left.unify(&right);
+
         let mut sub = Substitution::new();
-        sub.insert(VarId("X"), Function("b", vec![]).into_expr());
-        assert_eq!(left.unify(&right), Some(sub));  // functions and constants match, X is assigned constant b
+        sub.insert(x, Function("b", vec![]).into_expr());
+        assert_eq!(mgu, Some(sub));  // functions and constants match, X is assigned constant b
     }
     #[test]
     fn unify_6() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+
         let left = Function("f", vec![
-            Term::variable("X"),
+            Term::variable(x),
         ]).into_expr();
         let right = Function("f", vec![
-            Term::variable("Y"),
+            Term::variable(y),
         ]).into_expr();
+        let mgu = left.unify(&right);
+
         let mut sub = Substitution::new();
-        sub.insert(VarId("X"), Term::variable("Y"));
-        assert_eq!(left.unify(&right), Some(sub));  // functions and constants match, X and Y alias
+        sub.insert(x, Term::variable(y));
+        assert_eq!(mgu, Some(sub));  // functions and constants match, X and Y alias
     }
     #[test]
     fn unify_7() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+
         let left = Function("f", vec![
-            Term::variable("X"),
+            Term::variable(x),
         ]).into_expr();
         let right = Function("g", vec![
-            Term::variable("Y"),
+            Term::variable(y),
         ]).into_expr();
-        assert_eq!(left.unify(&right), None);  // functions do not match
+        let mgu = left.unify(&right);
+
+        assert_eq!(mgu, None);  // functions do not match
     }
     #[test]
     fn unify_8() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+        let z = symbols.make_var();
+
         let left = Function("f", vec![
-            Term::variable("X"),
+            Term::variable(x),
         ]).into_expr();
         let right = Function("f", vec![
-            Term::variable("Y"),
-            Term::variable("Z"),
+            Term::variable(y),
+            Term::variable(z),
         ]).into_expr();
-        assert_eq!(left.unify(&right), None);  // functions have different arities
+        let mgu = left.unify(&right);
+
+        assert_eq!(mgu, None);  // functions have different arities
     }
     #[test]
     fn unify_9() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+
         let left = Function("f", vec![
             Function("a", vec![]).into_expr(),
-            Term::variable("X"),
+            Term::variable(x),
         ]).into_expr();
         let right = Function("f", vec![
             Function("a", vec![]).into_expr(),
             Function("b", vec![]).into_expr(),
         ]).into_expr();
+        let mgu = left.unify(&right);
+
         let mut sub = Substitution::new();
-        sub.insert(VarId("X"), Function("b", vec![]).into_expr());
-        assert_eq!(left.unify(&right), Some(sub));  // functions and constants match, X is assigned constant b
+        sub.insert(x, Function("b", vec![]).into_expr());
+        assert_eq!(mgu, Some(sub));  // functions and constants match, X is assigned constant b
     }
     #[test]
     fn unify_10() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+
         let left = Function("f", vec![
             Function("g", vec![
-                Term::variable("X"),
+                Term::variable(x),
             ]).into_expr(),
         ]).into_expr();
         let right = Function("f", vec![
-            Term::variable("Y"),
+            Term::variable(y),
         ]).into_expr();
+        let mgu = left.unify(&right);
+
         let mut sub = Substitution::new();
-        sub.insert(VarId("Y"), Function("g", vec![
-            Term::variable("X")
+        sub.insert(y, Function("g", vec![
+            Term::variable(x)
         ]).into_expr());
-        assert_eq!(left.unify(&right), Some(sub));  // y gets unified with the term g(x)
+        assert_eq!(mgu, Some(sub));  // y gets unified with the term g(x)
     }
     #[test]
     fn unify_11() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+
         let left = Function("f", vec![
             Function("g", vec![
-                Term::variable("X"),
+                Term::variable(x),
             ]).into_expr(),
-            Term::variable("X"),
+            Term::variable(x),
         ]).into_expr();
         let right = Function("f", vec![
-            Term::variable("Y"),
+            Term::variable(y),
             Function("a", vec![]).into_expr()
         ]).into_expr();
+        let mgu = left.unify(&right);
+
         let mut sub = Substitution::new();
-        sub.insert(VarId("X"), Function("a", vec![]).into_expr());
-        sub.insert(VarId("Y"), Function("g", vec![
+        sub.insert(x, Function("a", vec![]).into_expr());
+        sub.insert(y, Function("g", vec![
             Function("a", vec![]).into_expr()
         ]).into_expr());
-        assert_eq!(left.unify(&right), Some(sub));  // x assigned to constant a, y assigned to term g(a)
+
+        assert_eq!(mgu, Some(sub));  // x assigned to constant a, y assigned to term g(a)
     }
     #[test]
     fn unify_12() {
-        let left = Term::variable("X");
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+
+        let left = Term::variable(x);
         let right = Function("f", vec![
-            Term::variable("X"),
+            Term::variable(x),
         ]).into_expr();
-        assert_eq!(left.unify(&right), None);  // can not unify without infinite descent
+        let mgu = left.unify(&right);
+
+        assert_eq!(mgu, None);  // can not unify without infinite descent
     }
 }

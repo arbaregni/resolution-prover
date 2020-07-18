@@ -1,5 +1,4 @@
-use crate::ast::{Term, Substitution, TermPattern};
-use crate::prover::ClauseId;
+use crate::ast::{Term, TermPattern};
 use std::fmt;
 use std::collections::{HashMap};
 use map_in_place::MapVecInPlace;
@@ -186,6 +185,8 @@ impl <'a> Node<'a> {
     }
 }
 
+/* TODO tests and benchmarks for TermTree
+
 #[cfg(test)]
 mod tests {
     use crate::prover::{TermTree, ClauseId};
@@ -204,127 +205,6 @@ mod tests {
             self
         }
     }
-/*
-    #[test]
-    fn term_map_insert_0() {
-        let mut term_map = TermMap::new();
-        // insert g(a, f($x, $y)) = g^2 a^0 f^2 $x $y
-        // slices: [g^2] [a^0 f^2] [$x $y]
-        term_map.update(&Term::predicate("g", vec![
-            Term::atom("a"),
-            Term::predicate("f", vec![
-                Term::variable("x"),
-                Term::variable("y"),
-            ])
-        ]), ClauseId(0));
-        // println!("{:#?}", term_map);
-        assert_eq!(term_map, TermMap {
-            nodes: vec![
-                Node::Internal(HashMap::new()
-                    .build(vec![TermPattern::Function("g", 2)], 1)
-                ),
-                Node::Internal(HashMap::new()
-                    .build(vec![TermPattern::Function("a", 0), TermPattern::Function("f", 2)], 2)
-                ),
-                Node::Internal(HashMap::new()
-                    .build(vec![TermPattern::Variable(VarId("x")), TermPattern::Variable(VarId("y"))], 3)
-                ),
-                Node::Leaf(vec![ClauseId(0)]),
-            ]
-        });
-
-        // insert g(a, f(f($x), $z)) = `g^2 a^0 f^2 f^1 $z $x`
-        // slices: [g^2] [a^0 f^2] [f^1 $z] [$x]
-        term_map.update(&Term::predicate("g", vec![
-            Term::atom("a"),
-            Term::predicate("f", vec![
-                Term::predicate("f", vec![
-                    Term::variable("x")
-                ]),
-                Term::variable("z")
-            ])
-        ]), ClauseId(1));
-        // println!("==============================\n{:#?}", term_map);
-        assert_eq!(term_map, TermMap {
-            nodes: vec![
-                Node::Internal(HashMap::new()  // 0
-                    .build(vec![TermPattern::Function("g", 2)], 1)
-                ),
-                Node::Internal(HashMap::new()  // 1
-                    .build(vec![TermPattern::Function("a", 0), TermPattern::Function("f", 2)], 2)
-                ),
-                Node::Internal(HashMap::new() // 2
-                    .build(vec![TermPattern::Variable(VarId("x")), TermPattern::Variable(VarId("y"))], 3)
-                    .build(vec![TermPattern::Function("f", 1), TermPattern::Variable(VarId("z"))], 4)
-                ),
-                Node::Leaf(vec![ClauseId(0)]), // 3
-                Node::Internal(HashMap::new()  // 4
-                    .build(vec![TermPattern::Variable(VarId("x"))], 5)
-                ),
-                Node::Leaf(vec![ClauseId(1)]), // 5
-            ]
-        });
-
-        // insert another copy of g(a, f($x, $y)) to make sure the leaf is updated
-        // slices: [g^2] [a^0 f^2] [$x $y]
-        term_map.update(&Term::predicate("g", vec![
-            Term::atom("a"),
-            Term::predicate("f", vec![
-                Term::variable("x"),
-                Term::variable("y"),
-            ])
-        ]), ClauseId(2));
-        // println!("==============================\n{:#?}", term_map);
-        assert_eq!(term_map, TermMap {
-            nodes: vec![
-                Node::Internal(HashMap::new()  // 0
-                    .build(vec![TermPattern::Function("g", 2)], 1)
-                ),
-                Node::Internal(HashMap::new()  // 1
-                    .build(vec![TermPattern::Function("a", 0), TermPattern::Function("f", 2)], 2)
-                ),
-                Node::Internal(HashMap::new() // 2
-                    .build(vec![TermPattern::Variable(VarId("x")), TermPattern::Variable(VarId("y"))], 3)
-                    .build(vec![TermPattern::Function("f", 1), TermPattern::Variable(VarId("z"))], 4)
-                ),
-                Node::Leaf(vec![ClauseId(0), ClauseId(2)]), // 3
-                Node::Internal(HashMap::new()  // 4
-                    .build(vec![TermPattern::Variable(VarId("x"))], 5)
-                ),
-                Node::Leaf(vec![ClauseId(1)]), // 5
-            ]
-        });
-
-        // insert yet another copy of g(a, f($x, $y)) to make sure the leaf ignores the duplicate
-        // slices: [g^2] [a^0 f^2] [$x $y]
-        term_map.update(&Term::predicate("g", vec![
-            Term::atom("a"),
-            Term::predicate("f", vec![
-                Term::variable("x"),
-                Term::variable("y"),
-            ])
-        ]), ClauseId(2));
-        //  println!("==============================\n{:#?}", term_map);
-        assert_eq!(term_map, TermMap {
-            nodes: vec![
-                Node::Internal(HashMap::new()  // 0
-                    .build(vec![TermPattern::Function("g", 2)], 1)
-                ),
-                Node::Internal(HashMap::new()  // 1
-                    .build(vec![TermPattern::Function("a", 0), TermPattern::Function("f", 2)], 2)
-                ),
-                Node::Internal(HashMap::new() // 2
-                    .build(vec![TermPattern::Variable(VarId("x")), TermPattern::Variable(VarId("y"))], 3)
-                    .build(vec![TermPattern::Function("f", 1), TermPattern::Variable(VarId("z"))], 4)
-                ),
-                Node::Leaf(vec![ClauseId(0), ClauseId(2)]), // 3
-                Node::Internal(HashMap::new()  // 4
-                    .build(vec![TermPattern::Variable(VarId("x"))], 5)
-                ),
-                Node::Leaf(vec![ClauseId(1)]), // 5
-            ]
-        });
-    }
-
- */
 }
+
+*/

@@ -10,33 +10,44 @@ pub use clause_set::*;
 
 use crate::ast;
 use crate::error::BoxedErrorTrait;
-use crate::ast::Expr;
+use crate::ast::{Expr, SymbolTable};
 
 /// Parse and the givens and the goal,
-/// search for a proof, returning `Some(true)` on success, `Some(false)` otherwise
-/// returns `None` upon error
+/// search for a proof, returning `Ok(true)` on if one was found, `Ok(false)` otherwise
 pub fn service_proof_request(givens: &[&str], goal: &str) -> Result<bool, BoxedErrorTrait> {
+    let mut symbols = SymbolTable::new();
+
     let givens = givens
         .iter()
-        .map(|&source| ast::parse(source))
+        .map(|&source| ast::parse_with_symbols(source, &mut symbols))
         .collect::<Result<Vec<_>, _>>()?;
-    let goal = ast::parse(goal)?;
-    let success = find_proof(givens, goal)?;
+
+    let goal = ast::parse_with_symbols(goal, &mut symbols)?;
+    let success = find_proof(&mut symbols, givens, goal)?;
     Ok( success )
 }
 
+/// Parse and normalize the query expression,
+/// returning `Ok(clause_set)`, which is the query in clausal normal form
+pub fn service_clause_request(query: &str) -> Result<ClosedClauseSet, BoxedErrorTrait> {
+    let (mut symbols, query) = ast::parse(query)?;
+    let mut clause_set = ClosedClauseSet::new();
+    query.into_clauses(&mut symbols, &mut clause_set)?;
+    Ok(clause_set)
+}
+
 /// search for a proof of `query` from `givens`
-fn find_proof(givens: Vec<Expr<'_>>, goal: Expr<'_>) -> Result<bool, BoxedErrorTrait> {
+fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr<'_>>, goal: Expr<'_>) -> Result<bool, BoxedErrorTrait> {
     let mut clause_set = ClosedClauseSet::new();
     // enter all the givens
     for expr in givens {
-        expr.into_clauses(&mut clause_set)?;
+        expr.into_clauses(symbols, &mut clause_set)?;
     }
     // we do proof by contradiction
     // negate the goal, and if we find a contradiction, that's a proof
     goal
         .negate()
-        .into_clauses(&mut clause_set)?;
+        .into_clauses(symbols, &mut clause_set)?;
     println!("clause_set: {:#?}", clause_set);
     // search for the contradiction
     let success = clause_set.has_contradiction();
@@ -48,7 +59,7 @@ fn find_proof(givens: Vec<Expr<'_>>, goal: Expr<'_>) -> Result<bool, BoxedErrorT
 #[cfg(test)]
 mod tests {
     use crate::prover::{Clause, ClosedClauseSet, find_proof, ClauseBuilder};
-    use crate::ast::{ExprKind, Term};
+    use crate::ast::{ExprKind, Term, SymbolTable};
 
     #[test]
     fn clause_builder_0() {
@@ -203,15 +214,18 @@ mod tests {
     }
     #[test]
     fn satisfy_fol_0() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+
         let mut clause_set = ClosedClauseSet::new();
 
         // P(x) implies Q(x)
         let clause = ClauseBuilder::new()
             .set_lit(Term::predicate("P", vec![
-                Term::variable("x"),
+                Term::variable(x),
             ]), false)
             .set_lit(Term::predicate("Q", vec![
-                Term::variable("x"),
+                Term::variable(x),
             ]), true)
             .finish().expect("not a tautology");
         clause_set.integrate_clause(clause);
@@ -238,15 +252,19 @@ mod tests {
     }
     #[test]
     fn satisfy_fol_1() {
+        let mut symbols = SymbolTable::new();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+
         let mut clause_set = ClosedClauseSet::new();
 
         // P(x) or P(y)
         let clause = ClauseBuilder::new()
             .set_lit(Term::predicate("P", vec![
-                Term::variable("x"),
+                Term::variable(x),
             ]), true)
             .set_lit(Term::predicate("P", vec![
-                Term::variable("y"),
+                Term::variable(y),
             ]), true)
             .finish().expect("not a tautology");
         clause_set.integrate_clause(clause);
@@ -271,36 +289,41 @@ mod tests {
     }
     #[test]
     fn satisfy_fol_2() {
-        // P(u) or P(f(u))
+        let mut symbols = SymbolTable::new();
+        let u = symbols.make_var();
+        let v = symbols.make_var();
+        let w = symbols.make_var();
+        let x = symbols.make_var();
+
         let clause_0 = ClauseBuilder::new()
             .set_lit(Term::predicate("P", vec![
-                Term::variable("u")
+                Term::variable(u)
             ]), true)
             .set_lit(Term::predicate("P", vec![
                 Term::predicate("f", vec![
-                    Term::variable("u")
+                    Term::variable(u)
                 ])
             ]), true)
             .finish().expect("not a tautology");
         // ~P(v) or P(f(w))
         let clause_1 = ClauseBuilder::new()
             .set_lit(Term::predicate("P", vec![
-                Term::variable("v")
+                Term::variable(v)
             ]), false)
             .set_lit(Term::predicate("P", vec![
                 Term::predicate("f", vec![
-                    Term::variable("w")
+                    Term::variable(w)
                 ])
             ]), true)
             .finish().expect("not a tautology");
         // ~P(x) or not P(f(x))
         let clause_2 = ClauseBuilder::new()
             .set_lit(Term::predicate("P", vec![
-                Term::variable("x")
+                Term::variable(x)
             ]), false)
             .set_lit(Term::predicate("P", vec![
                 Term::predicate("f", vec![
-                    Term::variable("x")
+                    Term::variable(x)
                 ])
             ]), false)
             .finish().expect("not a tautology");
@@ -325,6 +348,8 @@ mod tests {
 
     #[test]
     fn provability_simple_0() {
+        let mut symbols = SymbolTable::new();
+
         let givens = vec![
             ExprKind::If(
                 Term::atom("it-rains").into(),
@@ -338,11 +363,13 @@ mod tests {
         ];
         let goal = Term::atom("will-fall").into();
 
-        let success = find_proof(givens, goal).expect("should not fail");
+        let success = find_proof(&mut symbols, givens, goal).expect("should not fail");
         assert_eq!(success, true);
     }
     #[test]
     fn provability_simple_1() {
+        let mut symbols = SymbolTable::new();
+
         let givens = vec![
             ExprKind::If(
                 Term::atom("it-rains").into(),    // if it-rains, you will get wet
@@ -358,11 +385,13 @@ mod tests {
                                  Term::atom("will-fall").into(),
         ).into();
 
-        let success = find_proof(givens, goal).expect("should not fail");
+        let success = find_proof(&mut symbols, givens, goal).expect("should not fail");
         assert_eq!(success, true);
     }
     #[test]
     fn provability_simple_2() {
+        let mut symbols = SymbolTable::new();
+
         let givens = vec![
             ExprKind::If(
                 Term::atom("it-rains").into(),    // if it-rains, you will get wet
@@ -375,11 +404,13 @@ mod tests {
         ];
         let goal = Term::atom("will-fall").into();
 
-        let success = find_proof(givens, goal).expect("should not fail");
+        let success = find_proof(&mut symbols, givens, goal).expect("should not fail");
         assert_eq!(success, false); // we can't prove definitely that you will fall
     }
     #[test]
     fn provability_simple_3() {
+        let mut symbols = SymbolTable::new();
+
         let givens = vec![
             ExprKind::Or(vec![
                 Term::atom("p").into(),
@@ -398,12 +429,14 @@ mod tests {
         // we should NOT be able to prove an arbitrary formula
         let goal = Term::atom("zeta").into();
 
-        let success = find_proof(givens, goal).expect("should not error");
+        let success = find_proof(&mut symbols, givens, goal).expect("should not error");
         assert_eq!(success, false);
     }
 
     #[test]
     fn provability_medium_0() {
+        let mut symbols = SymbolTable::new();
+
         let givens = vec![
             // if it rains, you will get wet
             ExprKind::If(
@@ -472,7 +505,7 @@ mod tests {
             Term::atom("clear-skies").into(),
             Term::atom("will-fall").into()
         ]).into();
-        let success = find_proof(givens, goal).expect("should not error");
+        let success = find_proof(&mut symbols, givens, goal).expect("should not error");
         assert_eq!(success, true);
     }
 
