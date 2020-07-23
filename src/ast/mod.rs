@@ -1,8 +1,8 @@
 mod symbols;
 pub use symbols::*;
 
-mod literal;
-pub use literal::*;
+mod term;
+pub use term::*;
 
 mod expr;
 pub use expr::*;
