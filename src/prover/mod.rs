@@ -11,6 +11,7 @@ pub use clause_set::*;
 use crate::ast;
 use crate::error::BoxedErrorTrait;
 use crate::ast::{Expr, SymbolTable};
+use std::io;
 
 /// Parse and the givens and the goal,
 /// search for a proof, returning `Ok(true)` on if one was found, `Ok(false)` otherwise
@@ -49,6 +50,9 @@ fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr<'_>>, goal: Expr<'_>) 
         .negate()
         .into_clauses(symbols, &mut clause_set)?;
     println!("clause_set: {:#?}", clause_set);
+
+    // clause_set.term_tree.pretty_print(&mut io::stdout()).unwrap();
+
     // search for the contradiction
     let success = clause_set.has_contradiction();
 

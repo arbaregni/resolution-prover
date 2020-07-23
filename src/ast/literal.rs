@@ -59,8 +59,6 @@ impl Term {
     pub fn variable(var_id: VarId) -> Term {
         TermKind::Variable(var_id).into_expr()
     }
-
-
     pub fn into<'a>(self) -> Expr<'a> {
         ExprKind::Term(self).into()
     }
@@ -93,15 +91,17 @@ impl Term {
             false
         }
     }
+    pub fn is_function(&self) -> bool {
+        if let TermKind::Function(_, _) = self.kind() {
+            true
+        } else {
+            false
+        }
+    }
     pub fn arity(&self) -> usize {
         match self.kind() {
             TermKind::Variable(_) => 0,
             TermKind::Function(_, args) => args.len(),
-        }
-    }
-    pub fn iter(&self) -> SubTermIterator {
-        SubTermIterator {
-            stack: vec![self.clone()]
         }
     }
     /// Perform the given substitution, producing a new literal expression

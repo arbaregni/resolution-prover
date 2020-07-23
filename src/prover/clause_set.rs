@@ -15,7 +15,7 @@ pub struct ClosedClauseSet {
     pub clauses: IndexSet<Clause>,
 
     /// retrieve terms that could be unifiable
-    term_tree: TermTree,
+    pub term_tree: TermTree,
 
     /// maps terms to their positive/negative occurrences in clauses
     occurrences: HashMap<Term, Occurrences>
@@ -76,7 +76,7 @@ impl ClosedClauseSet {
         // println!("integrated new clause, clauses: {:#?}", self.clauses);
         clause_id
     }
-    pub fn get<'s>(&'s self, id: ClauseId) -> &'s Clause {
+    pub fn get(&self, id: ClauseId) -> &Clause {
         self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
     }
     pub fn has_contradiction(&mut self) -> bool {

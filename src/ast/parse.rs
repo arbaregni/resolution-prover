@@ -145,6 +145,8 @@ fn parse_term<'a>(pair: Pair<'a, Rule>, symbols: &mut SymbolTable<'a>) -> Result
             };
             // bind the name to a variable, but only in our subscope
             let (var, shadow_info) = symbols.shadow_var(name);
+            println!("quantifying over: {:?}", var);
+
             let expr = parse_expr(iter, symbols)?;
             symbols.restore_binding(shadow_info);
 

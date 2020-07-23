@@ -1,7 +1,6 @@
 use crate::ast::{Term, TermPattern};
-use std::fmt;
+use std::{fmt, iter, io};
 use std::collections::{HashMap};
-use map_in_place::MapVecInPlace;
 
 /// Supports unification based lookup, using a discrimination tree
 #[derive(Debug, PartialEq, Eq)]
@@ -28,50 +27,38 @@ impl TermTree {
             skip_to_next: vec![Vec::new()],
         }
     }
-    /// Updates the `TermMap` to include a new usage of `term`, creating an entry if it doesn't exist
-    /// Expects to be called with increasing `clause_id`s
-    pub fn update(&mut self, term: Term) {
-        // update the discrimination tree
-        let mut arity_totals: Vec<(NodeId, usize)> = Vec::new(); // running total of the arity (used for determining subterm boundaries)
-        let mut node_id = 0 as NodeId; // start at the root noot
-        for subterm in term.iter() {
 
-            // treat the subterm's pattern as a prefix and look up the next trie node
-            let num_nodes = self.nodes.len();
-            node_id = self.nodes[node_id].get_or_insert(num_nodes, subterm.pattern());
-            // if we had to insert a child, then node_id == num_nodes
-            if node_id == num_nodes {
-                self.nodes.push(Node::new());
-                self.skip_to_next.push(Vec::new());
-            }
-
-            // deal with everything that has zero arity
-            // (we are the node that is skipped to)
-            arity_totals = arity_totals.filter_map_in_place(
-                |(prev_id, arity_sum)| {
-                    if arity_sum == 0 {
-                        self.skip_to_next[prev_id].push(node_id);
-                        None
-                    } else {
-                        Some( (prev_id, arity_sum) )
-                    }
-                }
-            );
-            // this is an argument to everything that came before it, so we take 1 from the arity sum
-            // BUT, we are also part of everythings expression tree, so we add our own arity
-            for (_, arity_sum) in arity_totals.iter_mut() {
-                *arity_sum = *arity_sum + subterm.arity() - 1;
-            }
-            arity_totals.push( (node_id, subterm.arity()) );
+    /// Inserts the sequence of patterns for `term` at `node_id`, returning the NodeId one after the last node in the pattern
+    fn create_path_at(&mut self, node_id: NodeId, term: &Term) -> NodeId {
+        // pass the current number of nodes in case we need to insert
+        let num_nodes = self.nodes.len();
+        let mut next_id = self.nodes[node_id].get_or_insert(num_nodes, term.pattern());
+        if next_id == num_nodes {
+            // inserting child
+            self.nodes.push(Node::new());
+            self.skip_to_next.push(Vec::new());
         }
-        // make the final term in our path a leaf
-        self.nodes[node_id].leafify(term.clone());
+        for subterm in term.children() {
+            next_id = self.create_path_at(next_id, subterm);
+        }
+        self.skip_to_next[node_id].push(next_id);
+        self.skip_to_next[node_id].dedup();
+        next_id
+    }
+
+    /// Updates the `TermMap` to include a new usage of `term`, creating an entry if it doesn't exist
+    pub fn update(&mut self, term: Term) {
+        // start the path at the root (node 0)
+        let leaf_id = self.create_path_at(0 as NodeId, &term);
+        // the last node in the path should point to a leaf containing the actual term
+        self.nodes[leaf_id].leafify(term);
     }
 
     /// Returns at least all terms which are generalizations of `query_term`,
     /// A term `t` generalizes a query term `s` iff there exists a substitution σ such that σ(t) = s
     /// Further filtering is required
     fn generalizations_of<'t>(&'t self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut Vec<Term>) {
+        println!("generalizations of. looking at node_id {} ({:?}), to_check: {:?}", node_id, &self.nodes[node_id], to_check);
         match &self.nodes[node_id] {
             Node::Leaf(terms) => {
                 assert!(to_check.is_empty()); // due to fixed_arity functions, we expect the path sizes to be equal
@@ -80,17 +67,21 @@ impl TermTree {
             },
             Node::Internal(map) => {
                 let term = to_check.pop().expect("query path ended early");
-                // we can def. match our own pattern
-                if let Some(child) = map.get(&term.pattern()) {
-                    // we must check the subterms
-                    for subterm in term.children() {
-                        to_check.push(subterm.clone());
+                // we can def. match our own pattern if we are a function
+                if term.is_function() {
+                    if let Some(child) = map.get(&term.pattern()) {
+                        // we must check the subterms
+                        println!("checking constant branch ({:?}) of node {}", term.pattern(), node_id);
+                        for subterm in term.children() {
+                            to_check.push(subterm.clone());
+                        }
+                        self.generalizations_of(*child, to_check, found);
                     }
-                    self.generalizations_of(*child, to_check, found);
                 }
                 // we can match any variable, but it consumes the current subterm and all its children
                 if let Some(child) = map.get(&TermPattern::Variable) {
                     // we don't check the subterms
+                    println!("checking variable branch of node {}", node_id);
                     self.generalizations_of(*child, to_check, found);
                 }
             },
@@ -148,6 +139,34 @@ impl TermTree {
         found
     }
 
+    /// Walk the tree, pretty-printing all the nodes
+    pub fn pretty_print<Writer>(&self, w: &mut Writer) -> io::Result<()>
+        where Writer: io::Write
+    {
+        self.pretty_print_node(w, 0, 0 as NodeId)?;
+        Ok(())
+    }
+    fn pretty_print_node<W>(&self, w: &mut W, indent_depth: usize, node_id: NodeId) -> io::Result<()>
+        where W: io::Write
+    {
+        let indent = iter::repeat(' ').take(indent_depth).collect::<String>();
+        w.write_fmt(format_args!("Node {} {{\n", node_id))?;
+        match &self.nodes[node_id] {
+            Node::Internal(map) => {
+                for (pat, child_id) in map.iter() {
+                    w.write_fmt(format_args!("{}    {:?} => ", indent, pat))?;
+                    self.pretty_print_node(w, indent_depth + 4, *child_id)?;
+                }
+            },
+            Node::Leaf(bucket) => {
+                for term in bucket.iter() {
+                    w.write_fmt(format_args!("{}    {:?}\n", indent, term))?;
+                }
+            },
+        }
+        w.write_fmt(format_args!("{}}}\n", indent))?;
+        Ok(())
+    }
 }
 
 impl fmt::Debug for TermPattern {
@@ -186,26 +205,135 @@ impl Node {
 }
 
 
-/* TODO tests and benchmarks for TermTree
 
 #[cfg(test)]
 mod tests {
-    use crate::prover::{TermTree, ClauseId};
-    use super::{Node, TermPattern};
+    use std::io;
     use crate::ast::Term;
-    use std::collections::HashMap;
 
-    trait MapBuilder<K, V> {
-        fn build(self, key: K, value: V) -> Self;
-    }
-    impl <K, V> MapBuilder<K, V> for HashMap<K, V>
-        where K: std::cmp::Eq + std::hash::Hash
-    {
-        fn build(mut self, key: K, value: V) -> Self {
-            self.insert(key, value);
-            self
+    macro_rules! symbols {
+        ($name:ident,
+         VARIABLES: $( $var:ident ),*
+         FUNCTIONS: $( $fun:ident ),*
+        ) => {
+                let mut $name = crate::ast::SymbolTable::new();
+                // declare variables
+                $(
+                    let $var = $name.make_var();
+                )*
+                // declare functions
+                $(
+                    let $fun = $name.make_fun();
+                )*
         }
     }
-}
 
-*/
+    macro_rules! term_tree {
+        ($($term:expr),* $(,)*) => {
+            {
+                let mut term_tree = crate::prover::TermTree::new();
+                $(
+                    term_tree.update($term.clone());
+                )*
+                term_tree
+            }
+        }
+    }
+
+    #[test]
+    fn unif_lookup_0() {
+        symbols!(_symbols,
+            VARIABLES: u, v, x, y
+            FUNCTIONS: p, a, b, c, d
+        );
+        let left_general = Term::predicate(p, vec![Term::variable(u), Term::variable(v)]);
+        let right_general = Term::predicate(p, vec![Term::variable(y), Term::variable(x)]);
+        let left_witness = Term::predicate(p, vec![Term::atom(a), Term::atom(b)]);
+        let right_witness = Term::predicate(p, vec![Term::atom(d), Term::atom(c)]);
+
+        let term_tree = term_tree!(left_general, right_general, left_witness, right_witness);
+
+        // term_tree.pretty_print(&mut io::stdout()).unwrap();
+
+        let mut found = term_tree.unification_candidates(left_general.clone());
+        found.sort(); found.dedup();
+
+        let mut expected = vec![left_general, right_general, left_witness, right_witness];
+        expected.sort();
+
+        assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn unif_lookup_1() {
+        symbols!(_symbols,
+            VARIABLES: u, v, x, y
+            FUNCTIONS: p, a, b, c, d
+        );
+        let left_general = Term::predicate(p, vec![Term::variable(u), Term::variable(v)]);
+        let right_general = Term::predicate(p, vec![Term::variable(y), Term::variable(x)]);
+        let left_witness = Term::predicate(p, vec![Term::atom(a), Term::atom(b)]);
+        let right_witness = Term::predicate(p, vec![Term::atom(d), Term::atom(c)]);
+
+        let term_tree = term_tree!(left_general, right_general, left_witness, right_witness);
+
+        // term_tree.pretty_print(&mut io::stdout()).unwrap();
+
+        let mut found = term_tree.unification_candidates(right_general.clone());
+        found.sort(); found.dedup();
+
+        let mut expected = vec![left_general, right_general, left_witness, right_witness];
+        expected.sort();
+
+        assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn unif_lookup_2() {
+        symbols!(_symbols,
+            VARIABLES: u, v, x, y
+            FUNCTIONS: p, a, b, c, d
+        );
+        let left_general = Term::predicate(p, vec![Term::variable(u), Term::variable(v)]);
+        let right_general = Term::predicate(p, vec![Term::variable(y), Term::variable(x)]);
+        let left_witness = Term::predicate(p, vec![Term::atom(a), Term::atom(b)]);
+        let right_witness = Term::predicate(p, vec![Term::atom(d), Term::atom(c)]);
+
+        let term_tree = term_tree!(left_general, right_general, left_witness, right_witness);
+
+        // term_tree.pretty_print(&mut io::stdout()).unwrap();
+
+        let mut found = term_tree.unification_candidates(left_witness.clone());
+        found.sort(); found.dedup();
+
+        let mut expected = vec![left_general, right_general, left_witness];
+        expected.sort();
+
+        assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn unif_lookup_3() {
+        symbols!(_symbols,
+            VARIABLES: u, v, x, y
+            FUNCTIONS: p, a, b, c, d
+        );
+        let left_general = Term::predicate(p, vec![Term::variable(u), Term::variable(v)]);
+        let right_general = Term::predicate(p, vec![Term::variable(y), Term::variable(x)]);
+        let left_witness = Term::predicate(p, vec![Term::atom(a), Term::atom(b)]);
+        let right_witness = Term::predicate(p, vec![Term::atom(d), Term::atom(c)]);
+
+        let term_tree = term_tree!(left_general, right_general, left_witness, right_witness);
+
+        // term_tree.pretty_print(&mut io::stdout()).unwrap();
+
+        let mut found = term_tree.unification_candidates(right_witness.clone());
+        found.sort(); found.dedup();
+
+        let mut expected = vec![left_general, right_general, right_witness];
+        expected.sort();
+
+        assert_eq!(found, expected);
+    }
+
+}
