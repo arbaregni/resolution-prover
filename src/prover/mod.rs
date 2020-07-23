@@ -49,7 +49,6 @@ fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr<'_>>, goal: Expr<'_>) 
     goal
         .negate()
         .into_clauses(symbols, &mut clause_set)?;
-    println!("clause_set: {:#?}", clause_set);
 
     // clause_set.term_tree.pretty_print(&mut io::stdout()).unwrap();
 
