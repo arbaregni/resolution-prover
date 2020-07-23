@@ -11,7 +11,6 @@ pub use clause_set::*;
 use crate::ast;
 use crate::error::BoxedErrorTrait;
 use crate::ast::{Expr, SymbolTable};
-use std::io;
 
 /// Parse and the givens and the goal,
 /// search for a proof, returning `Ok(true)` on if one was found, `Ok(false)` otherwise

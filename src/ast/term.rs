@@ -98,12 +98,6 @@ impl Term {
             false
         }
     }
-    pub fn arity(&self) -> usize {
-        match self.kind() {
-            TermKind::Variable(_) => 0,
-            TermKind::Function(_, args) => args.len(),
-        }
-    }
     /// Perform the given substitution, producing a new literal expression
     pub fn substitute(&self, sub: &Substitution) -> Term {
         match self.kind.deref() {

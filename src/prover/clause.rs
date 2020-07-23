@@ -58,6 +58,7 @@ impl ClauseBuilder {
             is_tautology: false
         }
     }
+    #[allow(dead_code)]
     pub fn set(mut self, term: Term, truth_value: bool) -> ClauseBuilder {
         self.insert(term, truth_value);
         self
@@ -94,6 +95,7 @@ impl Clause {
     /// Then, it must be the case that p is true, OR r is true,
     ///       and we don't know anything about q. This gives us:
     ///     `{p, r}` (p is true OR r is true)
+    #[allow(dead_code)]
     pub fn resolve(&self, other: &Clause) -> Option<Clause> {
         let sub = Substitution::new();
         self.resolve_under_substitution(other, &sub)

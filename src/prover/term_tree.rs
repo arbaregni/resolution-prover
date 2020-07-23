@@ -145,12 +145,14 @@ impl TermTree {
     }
 
     /// Walk the tree, pretty-printing all the nodes (helpful when debugging)
+    #[allow(dead_code)]
     pub fn pretty_print<Writer>(&self, w: &mut Writer) -> io::Result<()>
         where Writer: io::Write
     {
         self.pretty_print_node(w, 0, 0 as NodeId)?;
         Ok(())
     }
+    #[allow(dead_code)]
     fn pretty_print_node<Writer>(&self, w: &mut Writer, indent_depth: usize, node_id: NodeId) -> io::Result<()>
         where Writer: io::Write
     {
@@ -215,7 +217,6 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
     use crate::ast::Term;
 
     macro_rules! symbols {
@@ -275,6 +276,7 @@ mod tests {
         // term_tree.pretty_print(&mut io::stdout()).unwrap();
 
         let mut found = term_tree.unification_candidates(left_general.clone());
+        found.sort();
 
         let mut expected = set![left_general, right_general, left_witness, right_witness];
         expected.sort();
@@ -298,6 +300,7 @@ mod tests {
         // term_tree.pretty_print(&mut io::stdout()).unwrap();
 
         let mut found = term_tree.unification_candidates(right_general.clone());
+        found.sort();
 
         let mut expected = set![left_general, right_general, left_witness, right_witness];
         expected.sort();
@@ -345,6 +348,7 @@ mod tests {
         // term_tree.pretty_print(&mut io::stdout()).unwrap();
 
         let mut found = term_tree.unification_candidates(right_witness.clone());
+        found.sort();
 
         let mut expected = set![left_general, right_general, right_witness];
         expected.sort();
