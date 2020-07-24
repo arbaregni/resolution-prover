@@ -17,6 +17,7 @@ use crate::{prover};
 use crate::error::BoxedErrorTrait;
 
 const CONFIG_FILE_PATH: &'static str = "config.toml";
+const GITHUB_LINK: &'static str = "https://github.com/arbaregni/resolution-prover/";
 
 const PROVABLE_REACT: char = '✅';
 const UNPROVABLE_REACT: char = '❌';
@@ -72,7 +73,7 @@ fn about(ctx: &mut Context, msg: &Message, _args: Args) -> CommandResult {
                 .description(&format!("uses resolution to verify statements and proofs\nreacting means {} a proof is found, {} means no proof is found\n",
                                        PROVABLE_REACT, UNPROVABLE_REACT)
                 )
-                .url("https://github.com/arbaregni/resolution_prover")
+                .url(GITHUB_LINK)
         })
     })?;
     Ok( () )
