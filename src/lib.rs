@@ -7,7 +7,6 @@ mod ast;
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
 
-
 use error::BoxedErrorTrait;
 use ast::SymbolTable;
 use prover::ClosedClauseSet;
@@ -39,21 +38,3 @@ pub fn find_clause_set(query: &str) -> Result<ClosedClauseSet, BoxedErrorTrait> 
     query.into_clauses(&mut symbols, &mut clause_set)?;
     Ok(clause_set)
 }
-
-#[inline]
-pub fn fibonacci(n: u64) -> u64 {
-    let mut a = 0;
-    let mut b = 1;
-    match n {
-        0 => b,
-        _ => {
-            for _ in 0..n {
-                let sum = a + b;
-                a = b;
-                b = sum;
-            }
-            b
-        }
-    }
-}
-

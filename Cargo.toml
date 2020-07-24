@@ -34,5 +34,5 @@ features = [
 criterion = "0.3"
 
 [[bench]]
-name = "holistic_benchmark"
+name = "proof_benches"
 harness = false
