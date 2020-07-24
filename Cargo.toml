@@ -29,3 +29,10 @@ features = [
   "rustls_backend",
   "utils",
 ]
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "proof_benches"
+harness = false

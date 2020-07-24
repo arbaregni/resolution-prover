@@ -10,11 +10,10 @@ use std::{io, fs};
 use std::io::Read;
 use serde::Deserialize;
 use serenity::framework::StandardFramework;
-use crate::{prover, ast};
 use serenity::utils::MessageBuilder;
 use serenity::framework::standard::{HelpOptions, CommandGroup, help_commands};
 use std::collections::HashSet;
-use crate::prover::ClosedClauseSet;
+use crate::{prover};
 use crate::error::BoxedErrorTrait;
 
 const CONFIG_FILE_PATH: &'static str = "config.toml";
@@ -85,7 +84,7 @@ fn about(ctx: &mut Context, msg: &Message, _args: Args) -> CommandResult {
 fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     let givens = vec![];
     let goal = args.message();
-    match prover::service_proof_request(givens.as_slice(), goal) {
+    match resolution_prover::find_proof(givens.as_slice(), goal) {
         Ok(success) => {
             // react to the message depending on whether we were able to prove the goal
             let r = if success { PROVABLE_REACT } else { UNPROVABLE_REACT };
@@ -105,13 +104,9 @@ fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
 #[command]
 #[description("converts an expression to clausal normal form")]
 fn clauses(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
-    let mut clause_set = ClosedClauseSet::new();
-    let result = ast::parse(args.message())
-        .and_then(|expr| {
-            expr.into_clauses(&mut clause_set)
-        });
-    match result {
-        Ok(_) => {
+    let query = args.message();
+    match resolution_prover::find_clause_set(query) {
+        Ok(clause_set) => {
             let content = format!("{:#?}", clause_set.clauses);
             msg.channel_id.say(&ctx.http, &content)?;
         }
@@ -126,7 +121,7 @@ fn clauses(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     }
     Ok( () )
 }
-pub fn start() -> Result<(), BoxedErrorTrait> {
+pub fn start() -> std::result::Result<(), BoxedErrorTrait> {
     let config = Config::load()?;
     let mut client = Client::new(config.token(), Handler)?;
     client.with_framework(StandardFramework::new()

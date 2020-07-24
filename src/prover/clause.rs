@@ -1,11 +1,11 @@
 use std::collections::btree_map::Entry;
-use std::collections::{HashMap};
-use indexmap::set::IndexSet;
 use std::fmt::Formatter;
 use std::fmt;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap};
 use itertools::Itertools;
 use std::cmp::Ordering;
+
+use crate::ast::{Term, Substitution};
 
 /// A recursive macro that builds a clause from terms
 #[allow(unused_macros)]
@@ -15,74 +15,59 @@ macro_rules! clause_builder {
         crate::prover::ClauseBuilder::new()
     };
     ($term:ident) => {
-        $crate::prover::ClauseBuilder::new().set( stringify!($term), true)
+        $crate::prover::ClauseBuilder::new().set( Term::atom($term), true )
     };
     ( ~ $term:ident) => {
-        crate::prover::ClauseBuilder::new().set( stringify!($term), false)
+        crate::prover::ClauseBuilder::new().set( Term::atom($term), false )
     };
     // the recursive, truthy case
     ( $term:ident, $($tail:tt)*) => {
-        clause_builder!( $($tail)+ ).set( stringify!($term), true)
+        clause_builder!( $($tail)+ ).set( Term::atom($term), true )
     };
     // the recursive, falsy case
     ( ~ $term:ident, $($tail:tt)*) => {
-        clause_builder!( $($tail)* ).set( stringify!($term), false)
+        clause_builder!( $($tail)* ).set( Term::atom($term), false )
     };
 }
 /// Creates and finishes a clause builder on the given terms
 #[macro_export]
 macro_rules! clause {
     ( $($term:tt)* ) => {
-        clause_builder!( $($term)* ).finish().expect("hard-coded tautology")
+        clause_builder!( $($term)* ).finish().expect("hard_coded tautology")
     }
 }
 
 /// Any number of terms, at least one of which is true
 /// (the empty clause, of course, represents paradox)
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Clause<'a> {
+pub struct Clause {
     /// sorted vector of `(variable_name, truth_value)`, no duplicate variable names
-    terms: Vec<(&'a str, bool)>,
+    terms: Vec<(Term, bool)>,
 }
 
-pub struct ClauseBuilder<'a> {
-    terms: BTreeMap<&'a str, bool>,
+pub struct ClauseBuilder {
+    terms: BTreeMap<Term, bool>,
     is_tautology: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-/// id's used to reference interned clauses
-pub struct ClauseId(usize);
-
-#[derive(Debug)]
-/// interns clauses, and provides lookup by variable and truth value
-pub struct ClosedClauseSet<'a> {
-    /// the set of all clauses we have encountered thus far
-    pub clauses: IndexSet<Clause<'a>>,
-    /// maps `(variable_name, truth_value)` to vectors of clauses,
-    /// which contain that `variable_name` with that `truth_value`
-    term_map: HashMap<(&'a str, bool), Vec<ClauseId>>
-}
-
-impl <'a> ClauseBuilder<'a> {
+impl ClauseBuilder {
     /// Creates the empty clause
-    pub fn new() -> ClauseBuilder<'a> {
+    pub fn new() -> ClauseBuilder {
         ClauseBuilder {
             terms: BTreeMap::new(),
             is_tautology: false
         }
     }
-    /// Set a variable name to a specific truth-value, returning `self`
     #[allow(dead_code)]
-    pub fn set(mut self, var_name: &'a str, truth_value: bool) -> ClauseBuilder {
-        self.insert(var_name, truth_value);
+    pub fn set(mut self, term: Term, truth_value: bool) -> ClauseBuilder {
+        self.insert(term, truth_value);
         self
     }
-    /// Inserts a specific variable name with its truth-value,
+    /// Inserts a specific variable name with its truth_value,
     /// returns `true` if a tautology is created
-    pub fn insert(&mut self, var_name: &'a str, truth_value: bool) {
+    pub fn insert(&mut self, term: Term, truth_value: bool) {
         if self.is_tautology { return; }
-        match self.terms.entry(var_name) {
+        match self.terms.entry(term) {
             Entry::Vacant(entry) => {
                 entry.insert(truth_value);
             },
@@ -93,7 +78,7 @@ impl <'a> ClauseBuilder<'a> {
             },
         }
     }
-    pub fn finish(self) -> Option<Clause<'a>> {
+    pub fn finish(self) -> Option<Clause> {
         if self.is_tautology { return None; }
         let terms = self.terms
             .into_iter()
@@ -101,132 +86,103 @@ impl <'a> ClauseBuilder<'a> {
         Some(Clause { terms })
     }
 }
-impl <'a> Clause<'a> {
+impl Clause {
     /// apply the resolution rule to two clauses, which are guaranteed to have EXACTLY one conflict
-    /// the new clause contains all non-complementary terms
+    /// the new clause contains all non_complementary terms
     /// For example, suppose we have
     ///     `{p, q}` (p is true OR q is true)
     ///    `{~q, r}` (q is false OR r is true)
     /// Then, it must be the case that p is true, OR r is true,
     ///       and we don't know anything about q. This gives us:
     ///     `{p, r}` (p is true OR r is true)
-    pub fn resolve(&self, other: &Clause<'a>) -> Clause<'a> {
+    #[allow(dead_code)]
+    pub fn resolve(&self, other: &Clause) -> Option<Clause> {
+        let sub = Substitution::new();
+        self.resolve_under_substitution(other, &sub)
+    }
+    /// apply the resolution rule to two clauses, which are guaranteed to have EXACTLY one conflict,
+    /// upto the substitution `sub` which is passed to it, and applied to every term before resolving
+    /// For example, suppose we have
+    ///    `{~P($x), Q($x)}` (P($x) is false OR Q($x) is true)
+    ///    `{P(a)}`          (P(a) is true)
+    /// And we resolve under the substitution {$x => a}, we get:
+    ///    `{~P(a), Q(a)}`
+    ///    `{P(a)}`
+    /// And resolution proceeds as normal, giving us:
+    ///    `{Q(a)}`
+    pub fn resolve_under_substitution(&self, other: &Clause, sub: &Substitution) -> Option<Clause> {
         // we know at least one term will conflict, otherwise the new clause could have everything in both
         let capacity = self.terms.len() + other.terms.len() - 1;
         let mut resolvant_terms = Vec::with_capacity(capacity);
-        let mut left_iter = self.terms.iter().peekable();
-        let mut right_iter = other.terms.iter().peekable();
+        let mut left_iter = self.terms
+            .iter()
+            .map(|(term, truth)| {
+                (term.substitute(sub), *truth)
+            })
+            .peekable();
+        let mut right_iter = other.terms
+            .iter()
+            .map(|(term, truth)| {
+                (term.substitute(sub), *truth)
+            })
+            .peekable();
+        let mut canceled = false;
         loop {
             match (left_iter.peek(), right_iter.peek()) {
                 // there are two sides
                 ( Some((lname, ltruth)), Some((rname, rtruth)) ) => match lname.cmp(rname) {
                     Ordering::Less => {
                         // process the left side
+                        resolvant_terms.push( (lname.clone(), *ltruth));
                         left_iter.next();
-                        resolvant_terms.push( (*lname, *ltruth));
                     },
                     Ordering::Greater => {
                         // process the right side
+                        resolvant_terms.push( (rname.clone(), *rtruth));
                         right_iter.next();
-                        resolvant_terms.push( (*rname, *rtruth));
                     },
                     Ordering::Equal => {
                         // present the same variable, process both
-                        left_iter.next(); right_iter.next();
                         if ltruth == rtruth {
                             // terms are the same, it's just a redundancy
-                            resolvant_terms.push( (*lname, *rtruth));
+                            resolvant_terms.push( (lname.clone(), *rtruth));
                         } else {
                             // these are the conflicting terms, and we do not include them
+                            if canceled {
+                                return None; // we've already canceled terms: just return `None` right now
+                            }
+                            canceled = true;
                         }
+                        left_iter.next(); right_iter.next();
                     },
                 },
                 // there is only the left to process
                 ( Some((name, truth)), None ) => {
+                    resolvant_terms.push((name.clone(), *truth));
                     left_iter.next();
-                    resolvant_terms.push((*name, *truth));
                 }
                 // there is only the right to process
                 ( None, Some((name, truth)) ) => {
+                    resolvant_terms.push((name.clone(), *truth));
                     right_iter.next();
-                    resolvant_terms.push((*name, *truth));
                 }
                 (None, None) => { break; }
             }
         }
-        Clause { terms: resolvant_terms }
+        Some( Clause { terms: resolvant_terms } )
     }
     /// Returns true if this is the empty clause, i.e falso
     pub fn is_empty(&self) -> bool {
         self.terms.is_empty()
     }
-}
-
-impl <'a> ClosedClauseSet<'a> {
-    pub fn new() -> ClosedClauseSet<'a> {
-        ClosedClauseSet {
-            clauses: IndexSet::new(),
-            term_map: HashMap::new(),
-        }
-    }
-    /// get all clauses who have exactly one conflict with `clause`
-    pub fn clauses_with_one_conflict<'s>(&self, clause: &Clause<'a>) -> Vec<ClauseId>
-        where 'a: 's
-    {
-        // count the number of times we visit each clause id
-        let num_clauses = self.clauses.len();
-        let mut counts = Vec::with_capacity(num_clauses);
-        for _ in 0..num_clauses { counts.push(0); }
-
-        // iterate over the terms in `clause`
-        for (name, truth_value) in clause.terms.iter() {
-            // increment the count of each clause with the same name, but opposite truth_value
-            for clause_id in self.term_map[&(*name, !*truth_value)].iter() {
-                counts[clause_id.0] += 1;
-            }
-        }
-        // now, we take only those with exactly `1` count
-        counts.iter()
-            .enumerate()
-            .filter_map(|(idx, count)| {
-                if *count == 1 {
-                    Some( ClauseId(idx) )
-                } else {
-                    None
-                }
-            })
-            .collect()
-
-    }
-    /// Inserts the clause, providing the index into the set
-    pub fn integrate_clause(&mut self, clause: Clause<'a>) -> ClauseId {
-        let (idx, _) = self.clauses.insert_full(clause);
-        let clause_id = ClauseId(idx);
-        let clause: &Clause = self.clauses.get_index(idx).expect("missing clause");
-        for (name, truth_value) in clause.terms.iter() {
-            // add the name, and truth value to the term map
-            let cache = self.term_map
-                .entry((*name, *truth_value))
-                .or_insert(Vec::with_capacity(1));
-            // this clause has that (name, truth_value)
-            cache.push(clause_id);
-            // since we expect to call this on ever higher indices, it should be sorted
-            // thus, this removes all the duplicates
-            cache.dedup();
-            // make sure the negation also exists
-            self.term_map.entry((*name, !*truth_value))
-                .or_insert(Vec::new());
-        }
-        // println!("integrated new clause, clauses: {:#?}", self.clauses);
-        clause_id
-    }
-    pub fn get<'s>(&'s self, id: ClauseId) -> &'s Clause<'a> {
-        self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
+    /// Iterates over underlying vector
+    pub fn iter(&self) -> impl Iterator<Item = &(Term, bool)> {
+        self.terms.iter()
     }
 }
 
 
-impl fmt::Debug for Clause<'_> {
+impl fmt::Debug for Clause {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{{")?;
         let mut first = true;
@@ -236,9 +192,9 @@ impl fmt::Debug for Clause<'_> {
             }
             first = false;
             if *truth_value {
-                write!(f, "{}", term)?;
+                write!(f, "{:?}", term)?;
             } else {
-                write!(f, "~{}", term)?;
+                write!(f, "~{:?}", term)?;
             }
         }
         write!(f, "}}")?;
@@ -246,15 +202,3 @@ impl fmt::Debug for Clause<'_> {
     }
 }
 
-impl fmt::Debug for ClauseId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Clause {}", self.0)
-    }
-}
-/*
-impl fmt::Debug for ClosedClauseSet {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-
-    }
-}
- */

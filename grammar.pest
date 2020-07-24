@@ -3,7 +3,7 @@ WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 reserved = @{
    (  "if" | "then" | "implies" | "iff"
     | "or" | "and" | "xor"
-    | "not"
+    | "not" | "forall" | "exists"
    ) ~ !(ASCII_ALPHA | "_" | "-")
 }
 
@@ -22,14 +22,24 @@ bicond = { "iff" | "<=>" | "<->" | "<==>" | "<-->" }
 
 xor = { "xor" }
 
-parenthetical = { "(" ~ expr ~ ")" }
-
-term = _{
-     parenthetical | negation | literal
-}
-
 operator = {
     or | and | implies | bicond | xor
+}
+
+univ = { "forall" }
+
+exis = { "exists" }
+
+parenthetical = { "(" ~ expr ~ ")" }
+
+arg = { pred | literal }
+
+pred = { literal ~ "(" ~ (arg ~ ",")* ~ arg? ~ ")" }
+
+quantified = { (univ | exis) ~ literal ~ ":" ~ expr }
+
+term = _{
+     pred | quantified | parenthetical | negation | literal
 }
 
 expr = _{
