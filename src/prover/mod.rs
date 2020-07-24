@@ -7,37 +7,12 @@ pub use term_tree::*;
 
 mod clause_set;
 pub use clause_set::*;
-
-use crate::ast;
-use crate::error::BoxedErrorTrait;
 use crate::ast::{Expr, SymbolTable};
+use crate::error::BoxedErrorTrait;
 
-/// Parse and the givens and the goal,
-/// search for a proof, returning `Ok(true)` on if one was found, `Ok(false)` otherwise
-pub fn service_proof_request(givens: &[&str], goal: &str) -> Result<bool, BoxedErrorTrait> {
-    let mut symbols = SymbolTable::new();
-
-    let givens = givens
-        .iter()
-        .map(|&source| ast::parse_with_symbols(source, &mut symbols))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let goal = ast::parse_with_symbols(goal, &mut symbols)?;
-    let success = find_proof(&mut symbols, givens, goal)?;
-    Ok( success )
-}
-
-/// Parse and normalize the query expression,
-/// returning `Ok(clause_set)`, which is the query in clausal normal form
-pub fn service_clause_request(query: &str) -> Result<ClosedClauseSet, BoxedErrorTrait> {
-    let (mut symbols, query) = ast::parse(query)?;
-    let mut clause_set = ClosedClauseSet::new();
-    query.into_clauses(&mut symbols, &mut clause_set)?;
-    Ok(clause_set)
-}
-
-/// search for a proof of `query` from `givens`
-fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr<'_>>, goal: Expr<'_>) -> Result<bool, BoxedErrorTrait> {
+/// Uses proof by contradiction to search for a proof of `goal` from `givens`
+/// If it runs without internal error, returns `Ok(true)` if such a proof is found
+pub fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr>, goal: Expr) -> Result<bool, BoxedErrorTrait> {
     let mut clause_set = ClosedClauseSet::new();
     // enter all the givens
     for expr in givens {
@@ -51,11 +26,11 @@ fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr<'_>>, goal: Expr<'_>) 
 
     // clause_set.term_tree.pretty_print(&mut io::stdout()).unwrap();
 
-    // search for the contradiction
+    // a contradiction means that the system was inconsistent with `not goal`,
+    // meaning we have proven `goal`
     let success = clause_set.has_contradiction();
 
-    println!("after: {:#?}", clause_set);
-    Ok( success )
+    Ok(success)
 }
 
 #[cfg(test)]
