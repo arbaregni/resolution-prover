@@ -7,7 +7,7 @@ macro_rules! test {
         $name:ident, $success:expr, 
         GIVENS: $($given:expr),* $(,)*
         =>
-        GOAL: $goal:expr 
+        GOAL: $goal:expr $(,)*
     ) => {
         #[test]
         fn $name() {
@@ -103,3 +103,59 @@ test!(first_order_1, true,
       GIVENS: =>
       GOAL:   "(forall x: forall y: P(x, y)) <=> (forall y: forall x: P(x, y))"
 );
+
+test!(first_order_2, true,
+      GIVENS: =>
+      GOAL:   "forall x: P(x) -> exists x: P(x)"
+);
+
+test!(first_order_3, true,
+      GIVENS: =>
+      GOAL:   "(forall x: P(x)) -> P(c)"
+);
+
+test!(first_order_4, true,
+      GIVENS: =>
+      GOAL:   "P(c) -> exists x: P(x)"
+);
+
+test!(first_order_5, true,
+      GIVENS: =>
+      GOAL:   "forall x: (P(x) <=> ~~P(x))"
+);
+
+test!(first_order_6, true,
+      GIVENS: =>
+      GOAL:   "forall x: (not (P(x) and Q(x))) => (~P(x) or ~Q(x))"
+);
+
+test!(first_order_8, false,
+      GIVENS: =>
+      GOAL:   "P(c) -> forall x: P(x)"
+);
+
+test!(pathing_proof_0, false,
+      GIVENS: "forall x: forall y: Path(x, y) => Path(y, x)",
+              "forall x: forall y: forall z: (Path(x, y) and Path(y, z)) => Path(x, z)",
+              =>
+      GOAL:   "Path(a, c) or Path(z, m)"
+);
+
+test!(pathing_proof_1, false,
+      GIVENS: "forall x: forall y: Path(x, y) => Path(y, x)",
+              "forall x: forall y: forall z: (Path(x, y) and Path(y, z)) => Path(x, z)",
+              =>
+      GOAL:   "exists c: Path(c, c)"
+);
+
+test!(pathing_proof_2, true,
+      GIVENS: "forall x: forall y: Path(x, y) => Path(y, x)",
+              "forall x: forall y: forall z: (Path(x, y) and Path(y, z)) => Path(x, z)",
+              "forall x: forall y: (Broken(x) and Path(x, y)) => Broken(y)",
+              "Path(a, b)",
+              "Path(b, c) or Path(d, b)",
+              "Broken(c) and Broken(d)",
+              =>
+      GOAL:   "Broken(a)",
+);
+
