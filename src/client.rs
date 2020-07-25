@@ -120,6 +120,7 @@ fn clauses(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     }
     Ok( () )
 }
+
 pub fn start() -> std::result::Result<(), BoxedErrorTrait> {
     let config = Config::load()?;
     let mut client = Client::new(config.token(), Handler)?;
@@ -137,6 +138,19 @@ pub fn start() -> std::result::Result<(), BoxedErrorTrait> {
                error!("error running command `{}` for {}, sent at {}: {:?}",
                       cmd_name, msg.author.name, msg.timestamp, why);
            }
+        })
+        .unrecognised_command(|ctx, msg, unknown_cmd| {
+            let response = match unknown_cmd {
+                "verify" => {
+                    format!("Unknown command `verify`. Help: `verify` was recently renamed to `prove`")
+                }
+                _ => {
+                    return;
+                }
+            };
+            if let Err(e) = msg.channel_id.say(&ctx.http, response) {
+                error!("error responding to unknown command: {}", e);
+            }
         })
         .group(&GENERAL_GROUP)
     );
