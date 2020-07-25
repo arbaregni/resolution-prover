@@ -41,7 +41,7 @@ The name `heron` shouldn't mislead you into believing that this abstraction beha
 
 ***DO NOT BE FOOLED. NAMES ARE ARBITRARY AND HAVE NO MEANING BEYOND ASSUMPTIONS YOU MAKE ABOUT THEM.***
 
-Identifiers can also be made into variables by [quantifying](#quantifiers) over them.
+Identifiers can also be made into variables by [quantifying](#fol) over them.
 
 ### <a name="fun"></a> Functions (Predicates)
 An identifier followed by a parenthesized argument list, like so:
@@ -117,7 +117,7 @@ means
 ```
 ( forall x: (x or ~x) )
 ```
-because the `or` binds more tightly to the `x` than the `forall x:` does. See [quantification](#fol) for more details.
+because the `or` binds more tightly to the `x` than the `forall x:` does. See [quantification](#fol) for more details. This might be surprising, but it was marginally easier to implement, so :man_shrugging:.
 
 When mixing `and`, `or`, `iff`, and `xor`, parenthesis are **required** to make your meaning clear.
 For instance,
@@ -191,7 +191,7 @@ If this isn't the relationship you want to capture, you might want a [biconditio
 ### <a name="iff"></a> Biconditional - If and Only If
 Although if and only if (iff) is associative, its behavior is non-intuitive so you can not chain them as to prevent confusion:
 ```
-great-blue-heron iff ardea-herodias"
+great-blue-heron iff ardea-herodias
 ```
 This is true when `great-blue-heron` and `ardea-herodias` have the same truth value.
 This is the same as saying that `great-blue-heron implies ardea-herodias` and `ardea-herodias implies great-blue-heron`. Hence the "bi-" in "biconditional".
@@ -202,7 +202,7 @@ This is the same as saying that `great-blue-heron implies ardea-herodias` and `a
 | ~q | TRUE  | false |
 | q  | false | TRUE  |
 
-###<a name="xor"></a> Exclusive Or - xor
+### <a name="xor"></a> Exclusive Or - xor
 Like [iff](#iff), exclusive or (xor) is associative, but its behavior is non-intuitive so chaining is forbidden to prevent confusion.
 ```
 hot xor cold
@@ -220,9 +220,30 @@ As such, it is a much more [powerful system](https://en.wikipedia.org/wiki/G%C3%
 
 It does this by introducing quantifiers. These take an identifier name and "quantify" over it, turning it into a variable:
 ```
-forall x: Bird(x) => Heron(x)
+forall x: P(x)
 ```
-In the context of the `forall x:` expression, `x` is a variable, and not a constant. Quantifiers ***must*** be followed by exactly 1 identifier to quantify over. Anything else is erroneous nonsense.
+```
+exists x: Q(x)
+```
+
+In the context of the `forall x:` and `exists x:` expressions, `x` is a variable, and not a constant. Quantifiers ***must*** be followed by exactly 1 identifier to quantify over. Anything else is erroneous nonsense.
+
+The name exists as a variable only in the context of the quantified expression. For instance,
+```
+( exists x: Quacks(x) ) => Quacks(x)
+```
+is not provable.
+```
+ ( exists x: Quacks(x) ) => Quacks(x)
+             ^^^^^^^^       ^^^^^^^^^
+         variable $x        constant x
+```
+In the quantified expression, `x` is a variable. It is not the same as the `x` in the other expession, which is a constant. Renaming things makes it more clear what's happening:
+```
+ ( exists x: Quacks(x) ) => Quacks(xerxes)
+```
+The existence (or lack thereof) of something that quacks has nothing to do with something called `xerxes` quacking. See [existential quantification](#existential).
+      
 
 The following are not the only quantifiers, but they are traditional and enough for most purposes.
 
@@ -231,13 +252,21 @@ The [universal quantifier](https://en.wikipedia.org/wiki/Universal_quantificatio
 ```
 forall x: Bird(x)
 ```
-implies `Bird(heron)`, `Bird(fish)`, `Bird(happy)`, `Bird(you)`, `Bird(the-strange-ability-present-in-some-individuals)`, `Bird(Powerset(apple))`, `Bird(x)`, `Bird(AnyThingBut(x, y, z))`, etc. You get the picture.
+implies `Bird(heron)`, `Bird(fish)`, `Bird(happy)`, `Bird(you)`, `Bird(the-strange-ability-present-in-some-individuals)`, `Bird(Powerset(apple))`, `Bird(x)`, `Bird(AnyThingBut(x, y, z))`, etc. You get the picture. Intuitively, this could be understood to mean "all things which are called birds".
+
+Since that quickly obviates the need to call anything a bird, we might state instead
+```
+forall x: Bird(x) => Flies(x)
+```
+This means that all things that are called birds, are also called flying things. Intuitively, we might take this to be the proposition stating that "all birds fly".
 
 #### <a name="existential"></a>Existential Quantification - exists
 The [existential quantifier](https://en.wikipedia.org/wiki/Existential_quantification) means there is *at least one* specific object that we may substitute into it.
 ```
 exists x: Bird(x)
 ```
-Means that there is at least one thing such that `Bird` of that thing is a true expression.
+Means that there is at least one thing such that `Bird` of that thing is a true expression. Intuitively, "birds exist". A [controversial](https://www.youtube.com/watch?v=zNtr0RahRqM) proposition, I know.
+
+This does not say anything *about* the bird(s) that exist(s). There number of them could be 1, 27720, or infinite. This proposition states only that that number is **NOT** zero. From this proposition, we derive nothing about what these birds that (supposedly) exist are. They *could* be robotic.
 
 
