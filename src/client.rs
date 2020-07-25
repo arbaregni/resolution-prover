@@ -11,7 +11,7 @@ use std::io::Read;
 use serde::Deserialize;
 use serenity::framework::StandardFramework;
 use serenity::utils::MessageBuilder;
-use serenity::framework::standard::{HelpOptions, CommandGroup, help_commands};
+use serenity::framework::standard::{HelpOptions, CommandGroup, help_commands, DispatchError};
 use std::collections::HashSet;
 use crate::error::BoxedErrorTrait;
 
@@ -79,6 +79,7 @@ fn about(ctx: &mut Context, msg: &Message, _args: Args) -> CommandResult {
 }
 
 #[command]
+#[bucket = "rate-limited"]
 #[description("attempts to prove the expression")]
 fn prove(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     let givens = vec![];
@@ -150,6 +151,13 @@ pub fn start() -> std::result::Result<(), BoxedErrorTrait> {
             };
             if let Err(e) = msg.channel_id.say(&ctx.http, response) {
                 error!("error responding to unknown command: {}", e);
+            }
+        })
+        // limit to once per seven seconds
+        .bucket("rate-limited", |b| b.delay(7))
+        .on_dispatch_error(|ctx, msg, error| {
+            if let DispatchError::Ratelimited(seconds) = error {
+                let _ = msg.channel_id.say(&ctx.http, &format!("Rate limited. Try again in {} seconds.", seconds));
             }
         })
         .group(&GENERAL_GROUP)
