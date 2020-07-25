@@ -26,9 +26,9 @@ operator = {
     or | and | implies | bicond | xor
 }
 
-univ = { "forall" }
+univ = { "forall" | "∀" }
 
-exis = { "exists" }
+exis = { "exists" | "∃" }
 
 parenthetical = { "(" ~ expr ~ ")" }
 
