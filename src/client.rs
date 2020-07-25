@@ -12,7 +12,7 @@ use serde::Deserialize;
 use serenity::framework::StandardFramework;
 use serenity::utils::MessageBuilder;
 use serenity::framework::standard::{HelpOptions, CommandGroup, help_commands, DispatchError};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use crate::error::BoxedErrorTrait;
 
 const CONFIG_FILE_PATH: &'static str = "config.toml";
@@ -20,6 +20,14 @@ const GITHUB_LINK: &'static str = "https://github.com/arbaregni/resolution-prove
 
 const PROVABLE_REACT: char = '✅';
 const UNPROVABLE_REACT: char = '❌';
+
+/// Up to how many characters we typically display of a longer message
+const TEASER_LEN: usize = 12;
+
+/// Used to format time stamps in the given storage
+/// Currently, it is formatted as ctime: `Sun Jul  8 00:34:60 2001`
+const DATETIME_FORMATTER: &'static str = "%c";
+
 
 #[derive(Debug, Deserialize)]
 struct Config {
@@ -46,7 +54,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(about, prove, clauses)]
+#[commands(about, givens, prove, clauses)]
 struct General;
 
 #[help]
@@ -78,17 +86,86 @@ fn about(ctx: &mut Context, msg: &Message, _args: Args) -> CommandResult {
     Ok( () )
 }
 
+type TimeStamp = chrono::DateTime<chrono::FixedOffset>;
+
+/// Lookup key for Context::data
+struct GivenEventStorage;
+
+impl TypeMapKey for GivenEventStorage {
+    // map the user who used the `givens` command to the message arguments
+    type Value = HashMap<UserId, (String, TimeStamp)>;
+}
+
+fn update_givens(ctx: &mut Context, msg: &Message, source: String) -> Option<(String, TimeStamp)> {
+    let mut data = ctx.data.write();
+    let given_store = data.get_mut::<GivenEventStorage>().expect("missing given event storage");
+    given_store.insert(msg.author.id, (source, msg.timestamp))
+}
+
+fn clear_givens(ctx: &mut Context, user_id: UserId) -> Option<(String, TimeStamp)> {
+    let mut data = ctx.data.write();
+    let given_store = data.get_mut::<GivenEventStorage>().expect("missing given event storage");
+    // clear the store
+    given_store.remove(&user_id)
+}
+
+fn retrieve_givens(ctx: &mut Context, user_id: UserId) -> (String, Option<TimeStamp>) {
+    let mut data = ctx.data.write();
+    let given_store = data.get_mut::<GivenEventStorage>().expect("missing given event storage");
+    match given_store.get(&user_id) {
+        None => (String::new(), None),
+        Some((source, ts)) => (source.clone(), Some(ts.clone())),
+    }
+}
+
+#[command]
+#[description("the next prove command you send will assume your current list of givens.\nCalling `givens` with no arguments clears your store.")]
+fn givens(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
+    let response = if args.message().trim().is_empty() {
+        // an empty givens means clear the store
+        let prev = clear_givens(ctx, msg.author.id);
+        let what_happened_to_the_old_givens = if let Some((prev_source, prev_ts)) = prev {
+            let (teaser, _) = prev_source.split_at(TEASER_LEN);
+            format!(", forgetting the old ones which were set at {} and began with `{}...`",
+                    prev_ts.format(DATETIME_FORMATTER), teaser)
+        } else {
+            format!("")
+        };
+        format!("Cleared givens for {}", msg.author.name)
+    } else {
+        // associate the arguments with the author of the message
+        let prev = update_givens(ctx, msg, args.message().to_string());
+        let what_happened_to_the_old_givens = if let Some((prev_source, prev_ts)) = prev {
+            let (teaser, _) = prev_source.split_at(TEASER_LEN);
+            format!(", replacing the old ones which were set at {} and began with `{}...`",
+                    prev_ts.format(DATETIME_FORMATTER), teaser)
+        } else {
+            format!("")
+        };
+        format!("Set givens for {}", msg.author.name)
+    };
+    msg.channel_id.say(&ctx.http, response)?;
+
+    Ok( () )
+}
+
 #[command]
 #[bucket = "rate-limited"]
 #[description("attempts to prove the expression")]
 fn prove(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
-    let givens = vec![];
-    let goal = args.message();
+    let (given_source, opt_ts) = retrieve_givens(ctx, msg.author.id);
+    let givens = given_source.as_str().lines().collect::<Vec<&str>>();
+    let goal= args.message();
     match resolution_prover::find_proof(givens.as_slice(), goal) {
         Ok(success) => {
             // react to the message depending on whether we were able to prove the goal
             let r = if success { PROVABLE_REACT } else { UNPROVABLE_REACT };
-            msg.react(ctx, r)?;
+            msg.react(&ctx.http, r)?;
+            // if we used a given set, say what the timestamp of it was
+            if let Some(ts) = opt_ts {
+                let response = format!("(used given set defined by {} at {})", msg.author.name, ts.format(DATETIME_FORMATTER));
+                msg.channel_id.say(&ctx.http, &response)?;
+            }
         }
         Err(err) => {
             let why = err.to_string();
@@ -128,6 +205,7 @@ pub fn start() -> std::result::Result<(), BoxedErrorTrait> {
     client.with_framework(StandardFramework::new()
         .configure(|c| c
             .prefix(config.prefix())
+            .delimiters(vec!['\n','\r'])
         )
         .help(&MY_HELP)
         .before(|_, msg, cmd_name| {
@@ -162,6 +240,13 @@ pub fn start() -> std::result::Result<(), BoxedErrorTrait> {
         })
         .group(&GENERAL_GROUP)
     );
+
+    {
+        let mut data = client.data.write();
+        data.insert::<GivenEventStorage>(HashMap::new());
+    }
+
+
     client.start()?;
     Ok( () )
 }

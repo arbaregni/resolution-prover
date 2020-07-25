@@ -16,6 +16,7 @@ toml = "*"
 serde = { version = "*", features = ["derive"] }
 log = "0.4"
 pretty_env_logger = "0.3"
+chrono = "*"
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity"
