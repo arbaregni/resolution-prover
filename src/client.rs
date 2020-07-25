@@ -13,7 +13,6 @@ use serenity::framework::StandardFramework;
 use serenity::utils::MessageBuilder;
 use serenity::framework::standard::{HelpOptions, CommandGroup, help_commands};
 use std::collections::HashSet;
-use crate::{prover};
 use crate::error::BoxedErrorTrait;
 
 const CONFIG_FILE_PATH: &'static str = "config.toml";
@@ -47,7 +46,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(about, verify, clauses)]
+#[commands(about, prove, clauses)]
 struct General;
 
 #[help]
@@ -80,8 +79,8 @@ fn about(ctx: &mut Context, msg: &Message, _args: Args) -> CommandResult {
 }
 
 #[command]
-#[description("attempts to prove the expression with no priors\nNOTE: this is not the same thing as being true or false.")]
-fn verify(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
+#[description("attempts to prove the expression")]
+fn prove(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
     let givens = vec![];
     let goal = args.message();
     match resolution_prover::find_proof(givens.as_slice(), goal) {
