@@ -12,9 +12,9 @@ literal = @{ !reserved ~ (ASCII_ALPHA | "_" ) ~ (ASCII_ALPHA | "_" | "-")* }
 not = _{ "not" | "!" | "~" }
 negation = { not ~ term }
 
-or = { "or" | "||" | "|" }
+or = { "or" | "||" | "|" | "∨" | "\\/" }
 
-and = { "and" | "&&" | "&" }
+and = { "and" | "&&" | "&" | "∧" | "/\\" }
 
 implies = { "implies" | "=>" | "->" | "==>" | "-->" }
 
