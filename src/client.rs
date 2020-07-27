@@ -131,7 +131,7 @@ fn givens(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
         } else {
             format!("")
         };
-        format!("Cleared givens for {}", msg.author.name)
+        format!("Cleared givens for {}{}", msg.author.name, what_happened_to_the_old_givens)
     } else {
         // associate the arguments with the author of the message
         let prev = update_givens(ctx, msg, args.message().to_string());
@@ -142,7 +142,7 @@ fn givens(ctx: &mut Context, msg: &Message, args: Args) -> CommandResult {
         } else {
             format!("")
         };
-        format!("Set givens for {}", msg.author.name)
+        format!("Set givens for {}{}", msg.author.name, what_happened_to_the_old_givens)
     };
     msg.channel_id.say(&ctx.http, response)?;
 

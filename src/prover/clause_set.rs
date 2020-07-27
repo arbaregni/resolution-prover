@@ -3,6 +3,7 @@ use indexmap::set::IndexSet;
 use std::collections::HashMap;
 use crate::ast::{Term};
 use std::fmt;
+use crate::error::BoxedErrorTrait;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 /// id's used to reference interned clauses
@@ -79,13 +80,13 @@ impl ClosedClauseSet {
     pub fn get(&self, id: ClauseId) -> &Clause {
         self.clauses.get_index(id.0).expect("an invalid ClauseId was created")
     }
-    pub fn has_contradiction(&mut self) -> bool {
+    pub fn has_contradiction(&mut self) -> Result<bool, BoxedErrorTrait> {
         // every clause strictly before the cutoff has been completely resolved
         let mut cutoff = 0;
         loop {
             if let Some(clause) = self.clauses.get_index(cutoff) {
                 if clause.is_empty() {
-                    return true; // found a contradiction!
+                    return Ok(true); // found a contradiction!
                 }
                 let mut products = vec![];
                 // get all the resolvants
@@ -93,7 +94,7 @@ impl ClosedClauseSet {
                     // increment the count of each clause with the same name, but opposite truth_value
                     // get the terms for the *opposite* truth value
                     println!("searching for candidates to unify: {:?}", query_term);
-                    for term in self.term_tree.unification_candidates(query_term.clone()) {
+                    for term in self.term_tree.unification_candidates(query_term.clone())? {
                         if let Some(sub) = query_term.unify(&term) {
                             println!("unifying {:?} & {:?} via {:?}", query_term, term, sub);
                             let occr = self.occurrences.get(&term).expect("expected occurrences to be complete");
@@ -115,7 +116,7 @@ impl ClosedClauseSet {
 
                 for product in products.into_iter() {
                     if product.is_empty() {
-                        return true; // found a contradiction
+                        return Ok(true); // found a contradiction
                     }
                     self.integrate_clause(product);
                 }
@@ -129,7 +130,7 @@ impl ClosedClauseSet {
                 // the cut off has reached the end, and we haven't found an empty clause
                 // because everything all the clauses before the cutoff is closed,
                 // we know there is no way to get the empty clause
-                return false;
+                return Ok(false);
             }
         }
     }

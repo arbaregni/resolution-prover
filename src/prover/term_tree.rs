@@ -2,6 +2,7 @@ use crate::ast::{Term, TermPattern};
 use std::{fmt, iter, io};
 use std::collections::{HashMap};
 use indexmap::set::IndexSet;
+use crate::error::BoxedErrorTrait;
 
 /// Supports unification based lookup, using a discrimination tree
 #[derive(Debug, PartialEq, Eq)]
@@ -58,18 +59,21 @@ impl TermTree {
     /// Returns at least all terms which are generalizations of `query_term`,
     /// A term `t` generalizes a query term `s` iff there exists a substitution σ such that σ(t) = s
     /// Further filtering is required
-    fn generalizations_of<'t>(&'t self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut IndexSet<Term>) {
+    fn generalizations_of(&self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut IndexSet<Term>) -> Result<(), BoxedErrorTrait> {
         // println!("generalizations of. looking at node_id {} ({:?}), to_check: {:?}", node_id, &self.nodes[node_id], to_check);
         match &self.nodes[node_id] {
             Node::Leaf(terms) => {
-                assert!(to_check.is_empty()); // due to fixed_arity functions, we expect the path sizes to be equal
+                assert!(to_check.is_empty()); // due to fixed arity functions, we expect the path sizes to be equal
                 // println!("finding: {:?}", terms);
                 for t in terms {
                     found.insert(t.clone());
                 }
             },
             Node::Internal(map) => {
-                let term = to_check.pop().expect("query path ended early");
+                let term = match to_check.pop() {
+                    Some(term) => term,
+                    None => return internal_error!("query path ended early while generalizing with {:#?}", self),
+                };
                 // we can def. match our own pattern if we are a function
                 if term.is_function() {
                     if let Some(child) = map.get(&term.pattern()) {
@@ -78,22 +82,23 @@ impl TermTree {
                         for subterm in term.children() {
                             to_check.push(subterm.clone());
                         }
-                        self.generalizations_of(*child, to_check, found);
+                        self.generalizations_of(*child, to_check, found)?;
                     }
                 }
                 // we can match any variable, but it consumes the current subterm and all its children
                 if let Some(child) = map.get(&TermPattern::Variable) {
                     // we don't check the subterms
                     // println!("checking variable branch of node {}", node_id);
-                    self.generalizations_of(*child, to_check, found);
+                    self.generalizations_of(*child, to_check, found)?;
                 }
             },
         }
+        Ok(())
     }
     /// Returns at least all terms which are an instance of `query_term`
     /// A term `t` is an instance of a query term `s` iff there exists a substitution σ such that t = σ(s)
     /// Further filtering is required
-    fn instances_of(&self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut IndexSet<Term>) {
+    fn instances_of(&self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut IndexSet<Term>) -> Result<(), BoxedErrorTrait>{
         match &self.nodes[node_id] {
             Node::Leaf(terms) => {
                 assert!(to_check.is_empty()); // due to fixed_arity functions, we expect the path sizes to be equal
@@ -102,14 +107,17 @@ impl TermTree {
                 }
             }
             Node::Internal(map) => {
-                let term = to_check.pop().expect("query path ended early");
+                let term = match to_check.pop() {
+                    Some(term) => term,
+                    None => return internal_error!("query path ended early on {:#?}", self),
+                };
                 // we can def. match our own pattern
                 if let Some(child) = map.get(&term.pattern()) {
                     // must check our subterms
                     for subterm in term.children() {
                         to_check.push(subterm.clone());
                     }
-                    self.instances_of(*child, to_check, found);
+                    self.instances_of(*child, to_check, found)?;
                 }
                 // if we are a variable, we can match anything, but it consumes that subterm
                 if term.is_variable() {
@@ -120,28 +128,29 @@ impl TermTree {
                             for subterm in term.children() {
                                 to_check.push(subterm.clone());
                             }
-                            self.instances_of(*next_node, to_check, found);
+                            self.instances_of(*next_node, to_check, found)?;
                         }
                     }
                 }
             }
         }
+        Ok(())
     }
     /// Return an iterator with all references to clauses containing terms that unify with `term`
-    pub fn unification_candidates(&self, query_term: Term) -> IndexSet<Term> {
+    pub fn unification_candidates(&self, query_term: Term) -> Result<IndexSet<Term>, BoxedErrorTrait> {
         // collect candidates here
         let mut found = IndexSet::new();
 
         // find generalizations, i.e. we can map terms in the tree --> the query via a substitution
         let mut to_check = vec![query_term.clone()];
-        self.generalizations_of(0 as NodeId, &mut to_check, &mut found);
+        self.generalizations_of(0 as NodeId, &mut to_check, &mut found)?;
 
         // find instances, i.e. we can map the query --> terms in the tree via a substitution
         let mut to_check = vec![query_term.clone()];
-        self.instances_of(0 as NodeId, &mut to_check, &mut found);
+        self.instances_of(0 as NodeId, &mut to_check, &mut found)?;
 
         found.insert(query_term); // the term itself, of course, should be included
-        found
+        Ok(found)
     }
 
     /// Walk the tree, pretty-printing all the nodes (helpful when debugging)
@@ -275,7 +284,7 @@ mod tests {
 
         // term_tree.pretty_print(&mut io::stdout()).unwrap();
 
-        let mut found = term_tree.unification_candidates(left_general.clone());
+        let mut found = term_tree.unification_candidates(left_general.clone()).expect("should not error");
         found.sort();
 
         let mut expected = set![left_general, right_general, left_witness, right_witness];
@@ -299,7 +308,7 @@ mod tests {
 
         // term_tree.pretty_print(&mut io::stdout()).unwrap();
 
-        let mut found = term_tree.unification_candidates(right_general.clone());
+        let mut found = term_tree.unification_candidates(right_general.clone()).expect("should not error");
         found.sort();
 
         let mut expected = set![left_general, right_general, left_witness, right_witness];
@@ -323,7 +332,7 @@ mod tests {
 
         // term_tree.pretty_print(&mut io::stdout()).unwrap();
 
-        let mut found = term_tree.unification_candidates(left_witness.clone());
+        let mut found = term_tree.unification_candidates(left_witness.clone()).expect("should not error");
         found.sort();
 
         let mut expected = set![left_general, right_general, left_witness];
@@ -347,7 +356,7 @@ mod tests {
 
         // term_tree.pretty_print(&mut io::stdout()).unwrap();
 
-        let mut found = term_tree.unification_candidates(right_witness.clone());
+        let mut found = term_tree.unification_candidates(right_witness.clone()).expect("should not error");
         found.sort();
 
         let mut expected = set![left_general, right_general, right_witness];

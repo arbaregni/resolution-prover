@@ -28,9 +28,7 @@ pub fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr>, goal: Expr) -> R
 
     // a contradiction means that the system was inconsistent with `not goal`,
     // meaning we have proven `goal`
-    let success = clause_set.has_contradiction();
-
-    Ok(success)
+    clause_set.has_contradiction()
 }
 
 #[cfg(test)]
@@ -101,7 +99,8 @@ mod tests {
 
         clause_set.integrate_clause(clause!()); // contradiction immediately
 
-        assert_eq!(clause_set.has_contradiction(), true); // make sure we recognize the falso in the premise
+        let success = clause_set.has_contradiction().expect("should not error");
+        assert_eq!(success, true); // should recognize the immediate contradiction
     }
     #[test]
     fn satisfy_simple_1() {
@@ -113,7 +112,8 @@ mod tests {
         clause_set.integrate_clause(clause!(p));
         clause_set.integrate_clause(clause!(~p));
 
-        assert_eq!(clause_set.has_contradiction(), true); // both p and ~p is a contradiction
+        let success = clause_set.has_contradiction().expect("should not error");
+        assert_eq!(success, true); // both q and ~q is a contradiction
     }
     #[test]
     fn satisfy_simple_2() {
@@ -127,7 +127,8 @@ mod tests {
         clause_set.integrate_clause(clause!(~p));   // not p, so q is true
         clause_set.integrate_clause(clause!(~q));   // q is not true
 
-        assert_eq!(clause_set.has_contradiction(), true); // both q and ~q is a contradiction
+        let success = clause_set.has_contradiction().expect("should not error");
+        assert_eq!(success, true); // both q and ~q is a contradiction
     }
     #[test]
     fn satisfy_simple_3() {
@@ -141,7 +142,8 @@ mod tests {
         clause_set.integrate_clause(clause!(p));     // p is true
         clause_set.integrate_clause(clause!(q));     // q is true
 
-        assert_eq!(clause_set.has_contradiction(), false);         // there is no contradiction
+        let success = clause_set.has_contradiction().expect("should not error");
+        assert_eq!(success, false); // there is no contradiction
     }
     #[test]
     fn satisfy_simple_4() {
@@ -157,8 +159,10 @@ mod tests {
         clause_set.integrate_clause(clause!(p));      // p is true
         clause_set.integrate_clause(clause!(~r));     // r is false
 
-        assert_eq!(clause_set.has_contradiction(), true);   // there is a contradiction, because we can derive r
+        let success = clause_set.has_contradiction().expect("should not error");
+        assert_eq!(success, true); // there is a contradiction because we can derive r
     }
+
     #[test]
     fn satisfy_simple_5() {
         let mut symbols = SymbolTable::new();
@@ -183,7 +187,9 @@ mod tests {
         // (7) ~r           resolution (3, 6)
         // (8) {}           resolution (5, 7)
 
-        assert_eq!(clause_set.has_contradiction(), true);        // there is a contradiction
+        let success = clause_set.has_contradiction().expect("should not error");
+
+        assert_eq!(success, true);        // there is a contradiction
     }
     #[test]
     fn satisfy_fol_0() {
@@ -214,7 +220,8 @@ mod tests {
             .finish().expect("not a tautology");
         clause_set.integrate_clause(clause);
 
-        assert_eq!(clause_set.has_contradiction(), false);
+        let success = clause_set.has_contradiction().expect("should not error");
+        assert_eq!(success, false);
 
         // make sure that we've derived what Q(a)
         let clause = ClauseBuilder::new()
@@ -255,7 +262,7 @@ mod tests {
             .finish().expect("not a tautology");
         clause_set.integrate_clause(clause);
 
-        let success = clause_set.has_contradiction();
+        let success = clause_set.has_contradiction().expect("should not error");
         // derivation:
         // P(x) or P(y)
         // P(x)           reduce (factor) by unifying x and y
@@ -312,7 +319,7 @@ mod tests {
         clause_set.integrate_clause(clause_0);
         clause_set.integrate_clause(clause_1);
         clause_set.integrate_clause(clause_2);
-        let success = clause_set.has_contradiction();
+        let success = clause_set.has_contradiction().expect("should not error");
         // derivation of a contradiction:
         // 0.  P(u) or  P(f(u))  given 0
         // 1. ~P(v) or  P(f(w))  given 1
