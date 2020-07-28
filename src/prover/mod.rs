@@ -283,6 +283,7 @@ mod tests {
         let f = symbols.make_fun();
         let p = symbols.make_fun();
 
+        // P(u) or P(f(u))
         let clause_0 = ClauseBuilder::new()
             .set(Term::predicate(p, vec![
                 Term::variable(u)
@@ -319,6 +320,9 @@ mod tests {
         clause_set.integrate_clause(clause_0);
         clause_set.integrate_clause(clause_1);
         clause_set.integrate_clause(clause_2);
+
+        // clause_set.term_tree.pretty_print(&mut std::io::stdout()).unwrap();
+
         let success = clause_set.has_contradiction().expect("should not error");
         // derivation of a contradiction:
         // 0.  P(u) or  P(f(u))  given 0

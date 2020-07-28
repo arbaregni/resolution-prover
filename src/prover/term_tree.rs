@@ -9,7 +9,7 @@ use crate::error::BoxedErrorTrait;
 pub struct TermTree {
     /// All nodes in the discrimination trie
     nodes: Vec<Node>,
-    skip_to_next: Vec<Vec<NodeId>>,
+    skip_to_next: Vec<IndexSet<NodeId>>,
 }
 
 /// `NodeId` are indices into `nodes` field of `TermMap`
@@ -26,7 +26,7 @@ impl TermTree {
     pub fn new() -> TermTree {
         TermTree {
             nodes: vec![Node::new()],
-            skip_to_next: vec![Vec::new()],
+            skip_to_next: vec![IndexSet::new()],
         }
     }
 
@@ -38,13 +38,12 @@ impl TermTree {
         if next_id == num_nodes {
             // inserting child
             self.nodes.push(Node::new());
-            self.skip_to_next.push(Vec::new());
+            self.skip_to_next.push(IndexSet::new());
         }
         for subterm in term.children() {
             next_id = self.create_path_at(next_id, subterm);
         }
-        self.skip_to_next[node_id].push(next_id);
-        self.skip_to_next[node_id].dedup();
+        self.skip_to_next[node_id].insert(next_id);
         next_id
     }
 
@@ -60,7 +59,7 @@ impl TermTree {
     /// A term `t` generalizes a query term `s` iff there exists a substitution σ such that σ(t) = s
     /// Further filtering is required
     fn generalizations_of(&self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut IndexSet<Term>) -> Result<(), BoxedErrorTrait> {
-        // println!("generalizations of. looking at node_id {} ({:?}), to_check: {:?}", node_id, &self.nodes[node_id], to_check);
+        println!("generalizations of. looking at node_id {} ({:?}), to_check: {:?}", node_id, &self.nodes[node_id], to_check);
         match &self.nodes[node_id] {
             Node::Leaf(terms) => {
                 assert!(to_check.is_empty()); // due to fixed arity functions, we expect the path sizes to be equal
@@ -72,23 +71,27 @@ impl TermTree {
             Node::Internal(map) => {
                 let term = match to_check.pop() {
                     Some(term) => term,
-                    None => return internal_error!("query path ended early while generalizing with {:#?}", self),
+                    None => {
+                        self.pretty_print(&mut io::stdout()).unwrap();
+                        return internal_error!("query path ended early while generalizing with ^^^");
+                    },
                 };
                 // we can def. match our own pattern if we are a function
                 if term.is_function() {
                     if let Some(child) = map.get(&term.pattern()) {
                         // we must check the subterms
-                        // println!("checking constant branch ({:?}) of node {}", term.pattern(), node_id);
-                        for subterm in term.children() {
-                            to_check.push(subterm.clone());
+                        let mut to_check_with_children = to_check.clone();
+                        println!("checking constant branch ({:?}) of node {}", term.pattern(), node_id);
+                        for subterm in term.children().iter().rev() {
+                            to_check_with_children.push(subterm.clone());
                         }
-                        self.generalizations_of(*child, to_check, found)?;
+                        self.generalizations_of(*child, &mut to_check_with_children, found)?;
                     }
                 }
                 // we can match any variable, but it consumes the current subterm and all its children
                 if let Some(child) = map.get(&TermPattern::Variable) {
                     // we don't check the subterms
-                    // println!("checking variable branch of node {}", node_id);
+                    println!("checking variable branch of node {}", node_id);
                     self.generalizations_of(*child, to_check, found)?;
                 }
             },
@@ -109,7 +112,9 @@ impl TermTree {
             Node::Internal(map) => {
                 let term = match to_check.pop() {
                     Some(term) => term,
-                    None => return internal_error!("query path ended early on {:#?}", self),
+                    None => {
+                        return internal_error!("query path ended early on {:#?}", self)
+                    },
                 };
                 // we can def. match our own pattern
                 if let Some(child) = map.get(&term.pattern()) {
@@ -360,6 +365,31 @@ mod tests {
         found.sort();
 
         let mut expected = set![left_general, right_general, right_witness];
+        expected.sort();
+
+        assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn unif_lookup_4() {
+        symbols!(_symbols,
+            VARIABLES: x, y
+            FUNCTIONS: path, a, b
+        );
+        let forward = Term::predicate(path, vec![Term::variable(x), Term::variable(y)]);
+        let reversed = Term::predicate(path, vec![Term::variable(y), Term::variable(x)]);
+        let concrete = Term::predicate(path, vec![Term::atom(a), Term::atom(b)]);
+        let concrete_rev = Term::predicate(path, vec![Term::atom(b), Term::atom(a)]);
+
+        let term_tree = term_tree!(forward, reversed, concrete, concrete_rev);
+
+
+        // term_tree.pretty_print(&mut std::io::stdout()).unwrap();
+
+        let mut found = term_tree.unification_candidates(concrete.clone()).expect("should not error");
+        found.sort();
+
+        let mut expected = set![forward, reversed, concrete, concrete_rev];
         expected.sort();
 
         assert_eq!(found, expected);
