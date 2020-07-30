@@ -1,7 +1,7 @@
 # resolution-prover
 
-Uses [propositional resolution](http://intrologic.stanford.edu/chapters/chapter_05.html) to verify statements and proofs on discord.
-Note that this is very different than being true or not.
+Uses [propositional resolution](http://intrologic.stanford.edu/chapters/chapter_05.html) to prove statements and proofs on discord.
+Note that this is [very different than being true or not](#provability).
 
 ## Table of contents
 
@@ -20,6 +20,7 @@ Note that this is very different than being true or not.
     - [Quantification and First Order Logic](#fol)
       - [Universal Quantification - forall](#universal)
       - [Existential Quantification - exists](#existential)
+   - [Provability and Truth](#provability)
       
       
 [Made with markdown-toc](https://luciopaiva.com/markdown-toc/)
@@ -269,4 +270,13 @@ Means that there is at least one thing such that `Bird` of that thing is a true 
 
 This does not say anything *about* the bird(s) that exist(s). There number of them could be 1, 27720, or infinite. This proposition states only that that number is **NOT** zero. From this proposition, we derive nothing about what these birds that (supposedly) exist are. They *could* be robotic.
 
+## <a name="provability"></a> Provability and Truth
+
+When asked to **prove** the following, we find:
+
+`IsBlue(the-sky)` :x:
+
+even though the sky is blue. This is because we don't care about seeing of a proposition is true, just if it is provable. And `IsBlue(the-sky)` is not nessicarily true with no prior assumptions. In general, it is much easier to define proofs than truths. See [Gödel's incompleteness theorems](https://en.wikipedia.org/wiki/G%C3%B6del%27s_incompleteness_theorems) and [Tarki's undefinability theorem](https://en.wikipedia.org/wiki/Tarski%27s_undefinability_theorem).
+
+To be precise, reacting with :x: means that no proof exists, and :white_check_mark: means that a proof exists.
 
