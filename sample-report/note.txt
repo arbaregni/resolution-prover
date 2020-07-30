@@ -1,5 +1,0 @@
-Benchmarks ran on 30 July 2020 on my laptop.
-
-NOTE: these are included on git for easier access to sample data.
-      Performance is influenced by many factors, including the machine, etc,
-etc.
