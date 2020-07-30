@@ -93,13 +93,13 @@ impl ClosedClauseSet {
                 for (query_term, truth_value) in clause.iter() {
                     // increment the count of each clause with the same name, but opposite truth_value
                     // get the terms for the *opposite* truth value
-                    println!("searching for candidates to unify: {:?}", query_term);
+                    // println!("searching for candidates to unify: {:?}", query_term);
                     for term in self.term_tree.unification_candidates(query_term.clone())? {
                         if let Some(sub) = query_term.unify(&term) {
-                            println!("unifying {:?} & {:?} via {:?}", query_term, term, sub);
+                            // println!("unifying {:?} & {:?} via {:?}", query_term, term, sub);
                             let occr = self.occurrences.get(&term).expect("expected occurrences to be complete");
                             for id in occr.get(!truth_value) {
-                                println!("present in {:?}", id);
+                                // println!("present in {:?}", id);
                                 let other = self.get(*id);
                                 if let Some(resolvant) = clause.resolve_under_substitution(other, &sub) {
                                     products.push(resolvant);
@@ -111,8 +111,8 @@ impl ClosedClauseSet {
                 // add every reduction of a clause (factoring rule) to the vector
                 products.extend_from_slice(&self.factors(clause));
 
-                println!("============================================================");
-                println!("resolving {:?} produced: {:?}", clause, products);
+                // println!("============================================================");
+                // println!("resolving {:?} produced: {:?}", clause, products);
 
                 for product in products.into_iter() {
                     if product.is_empty() {

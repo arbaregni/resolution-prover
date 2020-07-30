@@ -8,6 +8,7 @@ mod client;
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
 
+
 fn main() -> Result<(), ()> {
     pretty_env_logger::init();
 
@@ -17,5 +18,3 @@ fn main() -> Result<(), ()> {
 
     Ok( () )
 }
-
-

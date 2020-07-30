@@ -53,7 +53,6 @@ impl <'a> SymbolTable<'a> {
             self.functions.insert(k, fun_id);
             fun_id
         };
-        println!("{}^{} => {:?}", name, arity, fun_id);
         fun_id
     }
     /// Rebind `name` to a new VarId, returning it and the necessary information to restore the variable

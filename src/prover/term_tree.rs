@@ -59,7 +59,7 @@ impl TermTree {
     /// A term `t` generalizes a query term `s` iff there exists a substitution σ such that σ(t) = s
     /// Further filtering is required
     fn generalizations_of(&self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut IndexSet<Term>) -> Result<(), BoxedErrorTrait> {
-        println!("generalizations of. looking at node_id {} ({:?}), to_check: {:?}", node_id, &self.nodes[node_id], to_check);
+        // println!("generalizations of. looking at node_id {} ({:?}), to_check: {:?}", node_id, &self.nodes[node_id], to_check);
         match &self.nodes[node_id] {
             Node::Leaf(terms) => {
                 assert!(to_check.is_empty()); // due to fixed arity functions, we expect the path sizes to be equal
@@ -81,7 +81,7 @@ impl TermTree {
                     if let Some(child) = map.get(&term.pattern()) {
                         // we must check the subterms
                         let mut to_check_with_children = to_check.clone();
-                        println!("checking constant branch ({:?}) of node {}", term.pattern(), node_id);
+                        // println!("checking constant branch ({:?}) of node {}", term.pattern(), node_id);
                         for subterm in term.children().iter().rev() {
                             to_check_with_children.push(subterm.clone());
                         }
@@ -91,7 +91,7 @@ impl TermTree {
                 // we can match any variable, but it consumes the current subterm and all its children
                 if let Some(child) = map.get(&TermPattern::Variable) {
                     // we don't check the subterms
-                    println!("checking variable branch of node {}", node_id);
+                    // println!("checking variable branch of node {}", node_id);
                     self.generalizations_of(*child, to_check, found)?;
                 }
             },
