@@ -159,3 +159,10 @@ test!(pathing_proof_2, true,
       GOAL:   "Broken(a)",
 );
 
+test!(pathing_proof_3, true,
+    GIVENS: "forall x: forall y: forall z: (Path(x,y) & Path(y, z)) => Path(x, z)",
+            "Path(a,b)",
+            "Path(b,c)",
+           =>
+    GOAL:   "Path(a,c)",
+);
