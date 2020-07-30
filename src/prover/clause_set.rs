@@ -1,6 +1,6 @@
 use crate::prover::{Clause, TermTree, ClauseBuilder};
 use indexmap::set::IndexSet;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use crate::ast::{Term};
 use std::fmt;
 use crate::error::BoxedErrorTrait;

@@ -17,6 +17,7 @@ serde = { version = "*", features = ["derive"] }
 log = "0.4"
 pretty_env_logger = "0.3"
 chrono = "*"
+hashbrown = "0.8.1"
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity"
