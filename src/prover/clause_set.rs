@@ -1,9 +1,10 @@
 use crate::prover::{Clause, TermTree, ClauseBuilder};
 use indexmap::set::IndexSet;
-use std::collections::HashMap;
+use std::collections::{HashMap, BinaryHeap};
 use crate::ast::{Term};
-use std::fmt;
+use std::{fmt};
 use crate::error::BoxedErrorTrait;
+use serenity::static_assertions::_core::cmp::Ordering;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 /// id's used to reference interned clauses
@@ -18,6 +19,9 @@ pub struct ClosedClauseSet {
     /// retrieve terms that could be unifiable
     pub term_tree: TermTree,
 
+    /// Represent actions which lead to other states in a search space
+    action_queue: BinaryHeap<Action>,
+
     /// maps terms to their positive/negative occurrences in clauses
     occurrences: HashMap<Term, Occurrences>
 }
@@ -27,6 +31,7 @@ impl ClosedClauseSet {
         ClosedClauseSet {
             clauses: IndexSet::new(),
             term_tree: TermTree::new(),
+            action_queue: BinaryHeap::new(),
             occurrences: HashMap::new(),
         }
     }
@@ -74,7 +79,8 @@ impl ClosedClauseSet {
                 .or_insert(Occurrences::new())
                 .insert(*truth_value, clause_id)
         }
-        // println!("integrated new clause, clauses: {:#?}", self.clauses);
+        let estimate = clause.estimate();
+        self.action_queue.push(Action{ estimate, clause_id });
         clause_id
     }
     pub fn get(&self, id: ClauseId) -> &Clause {
@@ -82,57 +88,87 @@ impl ClosedClauseSet {
     }
     pub fn has_contradiction(&mut self) -> Result<bool, BoxedErrorTrait> {
         // every clause strictly before the cutoff has been completely resolved
-        let mut cutoff = 0;
         loop {
-            if let Some(clause) = self.clauses.get_index(cutoff) {
-                if clause.is_empty() {
-                    return Ok(true); // found a contradiction!
-                }
-                let mut products = vec![];
-                // get all the resolvants
-                for (query_term, truth_value) in clause.iter() {
-                    // increment the count of each clause with the same name, but opposite truth_value
-                    // get the terms for the *opposite* truth value
-                    // println!("searching for candidates to unify: {:?}", query_term);
-                    for term in self.term_tree.unification_candidates(query_term.clone())? {
-                        if let Some(sub) = query_term.unify(&term) {
-                            // println!("unifying {:?} & {:?} via {:?}", query_term, term, sub);
-                            let occr = self.occurrences.get(&term).expect("expected occurrences to be complete");
-                            for id in occr.get(!truth_value) {
-                                // println!("present in {:?}", id);
-                                let other = self.get(*id);
-                                if let Some(resolvant) = clause.resolve_under_substitution(other, &sub) {
-                                    products.push(resolvant);
-                                }
+            let clause = match self.action_queue
+                .pop()
+                .and_then(|action| {
+                    self.clauses.get_index(action.clause_id.0)
+                }) {
+                Some(clause) => clause,
+                None => return Ok(false), // no further actions to take, means the empty clause is not in here
+            };
+            if clause.is_empty() {
+                return Ok(true); // found a contradiction!
+            }
+            let mut products = vec![];
+            // get all the resolvants
+            for (query_term, truth_value) in clause.iter() {
+                // increment the count of each clause with the same name, but opposite truth_value
+                // get the terms for the *opposite* truth value
+                // println!("searching for candidates to unify: {:?}", query_term);
+                for term in self.term_tree.unification_candidates(query_term.clone())? {
+                    if let Some(sub) = query_term.unify(&term) {
+                        // println!("unifying {:?} & {:?} via {:?}", query_term, term, sub);
+                        let occr = self.occurrences.get(&term).expect("expected occurrences to be complete");
+                        for id in occr.get(!truth_value) {
+                            // println!("present in {:?}", id);
+                            let other = self.get(*id);
+                            if let Some(resolvant) = clause.resolve_under_substitution(other, &sub) {
+                                products.push(resolvant);
                             }
                         }
                     }
                 }
-                // add every reduction of a clause (factoring rule) to the vector
-                products.extend_from_slice(&self.factors(clause));
-
-                // println!("============================================================");
-                // println!("resolving {:?} produced: {:?}", clause, products);
-
-                for product in products.into_iter() {
-                    if product.is_empty() {
-                        return Ok(true); // found a contradiction
-                    }
-                    self.integrate_clause(product);
-                }
-
-                // println!("current set: {:#?}", self);
-
-                // advance the cutoff
-                cutoff += 1;
-
-            } else {
-                // the cut off has reached the end, and we haven't found an empty clause
-                // because everything all the clauses before the cutoff is closed,
-                // we know there is no way to get the empty clause
-                return Ok(false);
             }
+            // add every reduction of a clause (factoring rule) to the vector
+            products.extend_from_slice(&self.factors(clause));
+
+            // println!("============================================================");
+            // println!("resolving {:?} produced: {:?}", clause, products);
+
+            for product in products.into_iter() {
+                if product.is_empty() {
+                    return Ok(true); // found a contradiction
+                }
+                self.integrate_clause(product);
+            }
+
+            // println!("current set: {:#?}", self);
         }
+    }
+}
+
+/// The type of the distance heuristic
+type Dist = u32;
+
+/// Represents a branch from the current state of a ClosedClauseSet in the search space
+#[derive(Debug, Copy, Clone)]
+struct Action {
+    estimate: Dist,
+    clause_id: ClauseId,
+}
+impl Action {
+    /// Provide a heuristic of how close this action is to deriving the empty clause
+    fn estimate(&self) -> Dist {
+        self.estimate
+    }
+}
+/// `Action`s are ordered by the estimate we provide them
+impl Eq for Action { }
+
+impl PartialEq for Action {
+    fn eq(&self, other: &Self) -> bool {
+        self.estimate() == other.estimate()
+    }
+}
+impl Ord for Action {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.estimate().cmp(&other.estimate())
+    }
+}
+impl PartialOrd for Action {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.estimate().partial_cmp(&other.estimate())
     }
 }
 

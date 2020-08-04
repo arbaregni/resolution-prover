@@ -179,6 +179,10 @@ impl Clause {
     pub fn iter(&self) -> impl Iterator<Item = &(Term, bool)> {
         self.terms.iter()
     }
+    /// Estimate the benefit to searching for resolution partners of this clause
+    pub fn estimate(&self) -> u32 {
+        self.terms.len() as u32
+    }
 }
 
 
