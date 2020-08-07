@@ -116,7 +116,6 @@ impl TermTree {
     /// A term `t` is an instance of a query term `s` iff there exists a substitution σ such that t = σ(s)
     /// Further filtering is required
     fn instances_of(&self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut IndexSet<Term>) -> Result<(), BoxedErrorTrait>{
-        println!("in instances_of {:?}, to_check: {:?}", node_id, to_check);
         match &self.nodes[node_id] {
             Node::Leaf(terms) => {
                 assert!(to_check.is_empty()); // due to fixed_arity functions, we expect the path sizes to be equal

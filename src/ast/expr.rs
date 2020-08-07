@@ -323,7 +323,7 @@ impl <'a> Expr<'a> {
                 let mut builder = ClauseBuilder::new();
                 self.make_clause(&mut builder)?;
                 if let Some(clause) = builder.finish() {
-                    clause_set.integrate_clause(clause);
+                    clause_set.integrate_clause(clause)?;
                 }
             }
             And(exprs) => {

@@ -171,6 +171,16 @@ impl Clause {
         }
         Some( Clause { terms: resolvant_terms } )
     }
+    /// Apply a substitution and merge all of the identical terms,
+    /// possibly returning `None` if a tautology is created
+    pub fn factor_under_substitution(&self, sub: &Substitution) -> Option<Clause> {
+        let mut builder = ClauseBuilder::new();
+        for (term, truth_value) in self.iter() {
+            let mapped = term.substitute(sub);
+            builder.insert(mapped, *truth_value);
+        }
+        builder.finish()
+    }
     /// Returns true if this is the empty clause, i.e falso
     pub fn is_empty(&self) -> bool {
         self.terms.is_empty()
@@ -180,8 +190,16 @@ impl Clause {
         self.terms.iter()
     }
     /// Estimate the benefit to searching for resolution partners of this clause
-    pub fn estimate(&self) -> u32 {
+    pub fn num_terms(&self) -> u32 {
         self.terms.len() as u32
+    }
+    pub fn contains(&self, term: &Term, truth_value: bool) -> bool {
+        for (contained_term, contained_truth_value) in self.terms.iter() {
+            if contained_term == term && *contained_truth_value == truth_value {
+                return true;
+            }
+        }
+        false
     }
 }
 

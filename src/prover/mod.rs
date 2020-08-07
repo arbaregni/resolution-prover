@@ -24,6 +24,7 @@ pub fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr>, goal: Expr) -> R
         .negate()
         .into_clauses(symbols, &mut clause_set)?;
 
+    println!("clause_set: {:#?}", clause_set);
     // clause_set.term_tree.pretty_print(&mut io::stdout()).unwrap();
 
     // a contradiction means that the system was inconsistent with `not goal`,
@@ -87,8 +88,8 @@ mod tests {
 
         let mut interner = ClosedClauseSet::new();
 
-        let a = interner.integrate_clause(clause!(p, ~q, r));
-        let b = interner.integrate_clause(clause!(p, ~q, r));
+        let a = interner.integrate_clause(clause!(p, ~q, r)).expect("should not error");
+        let b = interner.integrate_clause(clause!(p, ~q, r)).expect("should not error");
         assert_eq!(a, b);
     }
 
@@ -97,7 +98,7 @@ mod tests {
     fn satisfy_simple_0() {
         let mut clause_set = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!()); // contradiction immediately
+        clause_set.integrate_clause(clause!()).expect("should not error"); // contradiction immediately
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // should recognize the immediate contradiction
@@ -109,8 +110,9 @@ mod tests {
 
         let mut clause_set = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(p));
-        clause_set.integrate_clause(clause!(~p));
+        clause_set.integrate_clause(clause!(p)).expect("should not error");
+        clause_set.integrate_clause(clause!(~p)).expect("should not error");
+
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // both q and ~q is a contradiction
@@ -123,9 +125,9 @@ mod tests {
 
         let mut clause_set = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(p, q)); // p or q
-        clause_set.integrate_clause(clause!(~p));   // not p, so q is true
-        clause_set.integrate_clause(clause!(~q));   // q is not true
+        clause_set.integrate_clause(clause!(p, q)).expect("should not error"); // p or q
+        clause_set.integrate_clause(clause!(~p)).expect("should not error");   // not p, so q is true
+        clause_set.integrate_clause(clause!(~q)).expect("should not error");   // q is not true
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // both q and ~q is a contradiction
@@ -138,9 +140,9 @@ mod tests {
 
         let mut clause_set= ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(~p, q)); // p => q
-        clause_set.integrate_clause(clause!(p));     // p is true
-        clause_set.integrate_clause(clause!(q));     // q is true
+        clause_set.integrate_clause(clause!(~p, q)).expect("should not error"); // p => q
+        clause_set.integrate_clause(clause!(p)).expect("should not error");     // p is true
+        clause_set.integrate_clause(clause!(q)).expect("should not error");     // q is true
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, false); // there is no contradiction
@@ -154,10 +156,10 @@ mod tests {
 
         let mut clause_set  = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(~p, q));  // p => q
-        clause_set.integrate_clause(clause!(~q, r));  // q => r
-        clause_set.integrate_clause(clause!(p));      // p is true
-        clause_set.integrate_clause(clause!(~r));     // r is false
+        clause_set.integrate_clause(clause!(~p, q)).expect("should not error");  // p => q
+        clause_set.integrate_clause(clause!(~q, r)).expect("should not error");  // q => r
+        clause_set.integrate_clause(clause!(p)).expect("should not error");      // p is true
+        clause_set.integrate_clause(clause!(~r)).expect("should not error");     // r is false
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // there is a contradiction because we can derive r
@@ -172,10 +174,10 @@ mod tests {
 
         let mut clause_set = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!( p,  q));   // p or q
-        clause_set.integrate_clause(clause!(~p,  r));  // not p or r
-        clause_set.integrate_clause(clause!(~p, ~r)); // not p or not r
-        clause_set.integrate_clause(clause!( p, ~q));  // p or not q
+        clause_set.integrate_clause(clause!( p,  q)).expect("should not error");   // p or q
+        clause_set.integrate_clause(clause!(~p,  r)).expect("should not error");  // not p or r
+        clause_set.integrate_clause(clause!(~p, ~r)).expect("should not error"); // not p or not r
+        clause_set.integrate_clause(clause!( p, ~q)).expect("should not error");  // p or not q
 
         // derivation of paradox:
         // (1) p or q       given
@@ -210,7 +212,7 @@ mod tests {
                 Term::variable(x),
             ]), true)
             .finish().expect("not a tautology");
-        clause_set.integrate_clause(clause);
+        clause_set.integrate_clause(clause).expect("should not error");
 
         // P(a)
         let clause = ClauseBuilder::new()
@@ -218,7 +220,7 @@ mod tests {
                 Term::atom(a),
             ]), true)
             .finish().expect("not a tautology");
-        clause_set.integrate_clause(clause);
+        clause_set.integrate_clause(clause).expect("should not error");
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, false);
@@ -252,7 +254,7 @@ mod tests {
                 Term::variable(y),
             ]), true)
             .finish().expect("not a tautology");
-        clause_set.integrate_clause(clause);
+        clause_set.integrate_clause(clause).expect("should not error");
 
         // ~P(a)
         let clause = ClauseBuilder::new()
@@ -260,7 +262,8 @@ mod tests {
                 Term::atom(a),
             ]), false)
             .finish().expect("not a tautology");
-        clause_set.integrate_clause(clause);
+        clause_set.integrate_clause(clause).expect("should not error");
+
 
         let success = clause_set.has_contradiction().expect("should not error");
         // derivation:
@@ -269,7 +272,6 @@ mod tests {
         // P(a)           unify x with a
         // ~P(a)
         // contradiction!
-        println!("{:#?}", clause_set);
         assert_eq!(success, true);
     }
     #[test]
@@ -317,9 +319,10 @@ mod tests {
             ]), false)
             .finish().expect("not a tautology");
         let mut clause_set = ClosedClauseSet::new();
-        clause_set.integrate_clause(clause_0);
-        clause_set.integrate_clause(clause_1);
-        clause_set.integrate_clause(clause_2);
+        clause_set.integrate_clause(clause_0).expect("should not error");
+        clause_set.integrate_clause(clause_1).expect("should not error");
+        clause_set.integrate_clause(clause_2).expect("should not error");
+
 
         // clause_set.term_tree.pretty_print(&mut std::io::stdout()).unwrap();
 
