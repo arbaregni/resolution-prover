@@ -9,6 +9,7 @@ use crate::error::BoxedErrorTrait;
 pub struct TermTree {
     /// All nodes in the discrimination trie
     nodes: Vec<Node>,
+    /// Maps ClauseId's to the nodes which begin the next term
     skip_to_next: Vec<IndexSet<NodeId>>,
 }
 
@@ -46,13 +47,26 @@ impl TermTree {
         self.skip_to_next[node_id].insert(next_id);
         next_id
     }
+    /// Converts the given node to a leaf variant, or updates it if already a leaf
+    fn leafify(&mut self, leaf_id: NodeId, term: Term) {
+        if let Node::Leaf(ref mut terms) = self.nodes[leaf_id] {
+            terms.insert(term);
+            return;
+        }
+        // must change to a leaf
+        let mut terms = IndexSet::new();
+        terms.insert(term);
+        self.nodes[leaf_id] = Node::Leaf(terms);
+        // the last node in our term's pattern sequence is the only node
+        // self.skip_to_next[leaf_id].insert(leaf_id);
+    }
 
     /// Updates the `TermMap` to include a new usage of `term`, creating an entry if it doesn't exist
     pub fn update(&mut self, term: Term) {
         // start the path at the root (node 0)
         let leaf_id = self.create_path_at(0 as NodeId, &term);
         // the last node in the path should point to a leaf containing the actual term
-        self.nodes[leaf_id].leafify(term);
+        self.leafify(leaf_id, term);
     }
 
     /// Returns at least all terms which are generalizations of `query_term`,
@@ -102,6 +116,7 @@ impl TermTree {
     /// A term `t` is an instance of a query term `s` iff there exists a substitution σ such that t = σ(s)
     /// Further filtering is required
     fn instances_of(&self, node_id: NodeId, to_check: &mut Vec<Term>, found: &mut IndexSet<Term>) -> Result<(), BoxedErrorTrait>{
+        println!("in instances_of {:?}, to_check: {:?}", node_id, to_check);
         match &self.nodes[node_id] {
             Node::Leaf(terms) => {
                 assert!(to_check.is_empty()); // due to fixed_arity functions, we expect the path sizes to be equal
@@ -128,6 +143,9 @@ impl TermTree {
                 if term.is_variable() {
                     for (_, child) in map.iter() {
                         // the term IN THE TREE is consumed, so we skip to the node of the next terms (if any)
+                        if self.skip_to_next[*child].is_empty() {
+                            self.instances_of(*child, to_check, found)?;
+                        }
                         for next_node in &self.skip_to_next[*child] {
                             // must check query subterms
                             for subterm in term.children() {
@@ -164,6 +182,7 @@ impl TermTree {
         where Writer: io::Write
     {
         self.pretty_print_node(w, 0, 0 as NodeId)?;
+        writeln!(w, "skips: {:#?}", self.skip_to_next)?;
         Ok(())
     }
     #[allow(dead_code)]
@@ -214,16 +233,6 @@ impl Node {
             // since all functions are fixed arity, this *should* never happen
             unreachable!()
         }
-    }
-    fn leafify(&mut self, term: Term) {
-        if let Node::Leaf(ref mut terms) = self {
-            terms.insert(term);
-            return;
-        }
-        // must change to a leaf
-        let mut terms = IndexSet::new();
-        terms.insert(term);
-        *self = Node::Leaf(terms);
     }
 }
 
@@ -287,7 +296,7 @@ mod tests {
 
         let term_tree = term_tree!(left_general, right_general, left_witness, right_witness);
 
-        // term_tree.pretty_print(&mut io::stdout()).unwrap();
+        // term_tree.pretty_print(&mut std::io::stdout()).unwrap();
 
         let mut found = term_tree.unification_candidates(left_general.clone()).expect("should not error");
         found.sort();
@@ -390,6 +399,27 @@ mod tests {
         found.sort();
 
         let mut expected = set![forward, reversed, concrete, concrete_rev];
+        expected.sort();
+
+        assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn unif_lookup_5() {
+        symbols!(_symbols,
+            VARIABLES: x, y
+            FUNCTIONS: f, a
+        );
+        let f_x = Term::predicate(f, vec![Term::variable(x)]);
+        let f_y = Term::predicate(f, vec![Term::variable(y)]);
+        let f_a = Term::predicate(f, vec![Term::atom(a)]);
+
+        let term_tree = term_tree!(f_x, f_y, f_a);
+
+        let mut found = term_tree.unification_candidates(f_x.clone()).expect("should not error");
+        found.sort();
+
+        let mut expected = set![f_x, f_y, f_a];
         expected.sort();
 
         assert_eq!(found, expected);
