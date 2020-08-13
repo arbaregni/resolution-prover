@@ -231,8 +231,7 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::Term;
-
+    use crate::ast::{TermMaker, Term};
     macro_rules! symbols {
         ($name:ident,
          VARIABLES: $( $var:ident ),*
@@ -276,7 +275,7 @@ mod tests {
 
     #[test]
     fn unif_lookup_0() {
-        symbols!(_symbols,
+        symbols!(symbols,
             VARIABLES: u, v, x, y
             FUNCTIONS: p, a, b, c, d
         );
@@ -300,7 +299,7 @@ mod tests {
 
     #[test]
     fn unif_lookup_1() {
-        symbols!(_symbols,
+        symbols!(symbols,
             VARIABLES: u, v, x, y
             FUNCTIONS: p, a, b, c, d
         );
@@ -324,7 +323,7 @@ mod tests {
 
     #[test]
     fn unif_lookup_2() {
-        symbols!(_symbols,
+        symbols!(symbols,
             VARIABLES: u, v, x, y
             FUNCTIONS: p, a, b, c, d
         );
@@ -348,7 +347,7 @@ mod tests {
 
     #[test]
     fn unif_lookup_3() {
-        symbols!(_symbols,
+        symbols!(symbols,
             VARIABLES: u, v, x, y
             FUNCTIONS: p, a, b, c, d
         );
@@ -372,7 +371,7 @@ mod tests {
 
     #[test]
     fn unif_lookup_4() {
-        symbols!(_symbols,
+        symbols!(symbols,
             VARIABLES: x, y
             FUNCTIONS: path, a, b
         );

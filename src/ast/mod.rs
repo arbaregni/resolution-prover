@@ -13,7 +13,7 @@ pub use parse::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{ExprKind, Term, Expr, SymbolTable};
+    use crate::ast::{ExprKind, Expr, SymbolTable, TermMaker, Term};
     use crate::prover::ClosedClauseSet;
     use crate::ast;
 
@@ -512,10 +512,10 @@ mod tests {
         expr.into_clauses(&mut symbols, &mut clause_set).expect("should not fail");
 
         assert_eq!(clause_set.clauses.len(), 4);
-        assert!(clause_set.clauses.contains( &clause!(day, love) ));
-        assert!(clause_set.clauses.contains( &clause!(day, war) ));
-        assert!(clause_set.clauses.contains( &clause!(night, love) ));
-        assert!(clause_set.clauses.contains( &clause!(night, war) ));
+        assert!(clause_set.clauses.contains( &clause!(symbols | day, love) ));
+        assert!(clause_set.clauses.contains( &clause!(symbols | day, war) ));
+        assert!(clause_set.clauses.contains( &clause!(symbols | night, love) ));
+        assert!(clause_set.clauses.contains( &clause!(symbols | night, war) ));
     }
     #[test]
     fn to_clauses_1() {

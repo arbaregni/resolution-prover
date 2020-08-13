@@ -225,7 +225,7 @@ impl <'a> Expr<'a> {
                 // make the substitution
                 let mut sub = Substitution::new();
                 sub.insert(var, skolem);
-                inner.unquantify_helper(free_variables, symbols).substitute(&sub)
+                inner.unquantify_helper(free_variables, symbols).substitute( &sub)
             },
             // recurse on sub expressions
             ExprKind::Term(_) => self, // no children

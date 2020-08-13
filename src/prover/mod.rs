@@ -34,7 +34,7 @@ pub fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr>, goal: Expr) -> R
 #[cfg(test)]
 mod tests {
     use crate::prover::{Clause, ClosedClauseSet, find_proof, ClauseBuilder};
-    use crate::ast::{ExprKind, Term, SymbolTable};
+    use crate::ast::{ExprKind, SymbolTable, TermMaker, Term};
 
     #[test]
     fn resolution_simple_0() {
@@ -43,9 +43,9 @@ mod tests {
         let q = symbols.make_fun();
         let r = symbols.make_fun();
 
-        let a = clause!(p, q);
-        let b = clause!(~q, r);
-        assert_eq!(Clause::resolve(&a, &b), Some(clause!(p, r)));
+        let a = clause!(symbols | p, q);
+        let b = clause!(symbols | ~q, r);
+        assert_eq!(Clause::resolve(&a, &b), Some(clause!(symbols | p, r)));
     }
     #[test]
     fn resolution_simple_1() {
@@ -53,18 +53,18 @@ mod tests {
         let p = symbols.make_fun();
         let q = symbols.make_fun();
 
-        let a = clause!(~p, q); // equivalent to p -> q
-        let b = clause!(p);
-        assert_eq!(Clause::resolve(&a, &b), Some(clause!(q)));
+        let a = clause!(symbols | ~p, q); // equivalent to p -> q
+        let b = clause!(symbols | p);
+        assert_eq!(Clause::resolve(&a, &b), Some(clause!(symbols | q)));
     }
     #[test]
     fn resolution_simple_2() {
         let mut symbols = SymbolTable::new();
         let p = symbols.make_fun();
 
-        let a = clause!(p);
-        let b = clause!(~p);
-        assert_eq!(Clause::resolve(&a, &b), Some(clause!()));
+        let a = clause!(symbols | p);
+        let b = clause!(symbols | ~p);
+        assert_eq!(Clause::resolve(&a, &b), Some(clause!(symbols |)));
     }
     #[test]
     fn resolution_simple_3() {
@@ -73,9 +73,9 @@ mod tests {
         let q = symbols.make_fun();
         let m = symbols.make_fun();
 
-        let a = clause!(~m, p, q);
-        let b = clause!(~p, q);
-        assert_eq!(Clause::resolve(&a, &b), Some(clause!(~m, q)));
+        let a = clause!(symbols | ~m, p, q);
+        let b = clause!(symbols | ~p, q);
+        assert_eq!(Clause::resolve(&a, &b), Some(clause!(symbols | ~m, q)));
     }
 
     #[test]
@@ -87,8 +87,8 @@ mod tests {
 
         let mut interner = ClosedClauseSet::new();
 
-        let a = interner.integrate_clause(clause!(p, ~q, r));
-        let b = interner.integrate_clause(clause!(p, ~q, r));
+        let a = interner.integrate_clause(clause!(symbols | p, ~q, r));
+        let b = interner.integrate_clause(clause!(symbols | p, ~q, r));
         assert_eq!(a, b);
     }
 
@@ -97,7 +97,7 @@ mod tests {
     fn satisfy_simple_0() {
         let mut clause_set = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!()); // contradiction immediately
+        clause_set.integrate_clause(clause!(symbols | )); // contradiction immediately
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // should recognize the immediate contradiction
@@ -109,8 +109,8 @@ mod tests {
 
         let mut clause_set = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(p));
-        clause_set.integrate_clause(clause!(~p));
+        clause_set.integrate_clause(clause!(symbols | p));
+        clause_set.integrate_clause(clause!(symbols | ~p));
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // both q and ~q is a contradiction
@@ -123,9 +123,9 @@ mod tests {
 
         let mut clause_set = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(p, q)); // p or q
-        clause_set.integrate_clause(clause!(~p));   // not p, so q is true
-        clause_set.integrate_clause(clause!(~q));   // q is not true
+        clause_set.integrate_clause(clause!(symbols | p, q)); // p or q
+        clause_set.integrate_clause(clause!(symbols | ~p));   // not p, so q is true
+        clause_set.integrate_clause(clause!(symbols | ~q));   // q is not true
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // both q and ~q is a contradiction
@@ -138,9 +138,9 @@ mod tests {
 
         let mut clause_set= ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(~p, q)); // p => q
-        clause_set.integrate_clause(clause!(p));     // p is true
-        clause_set.integrate_clause(clause!(q));     // q is true
+        clause_set.integrate_clause(clause!(symbols | ~p, q)); // p => q
+        clause_set.integrate_clause(clause!(symbols | p));     // p is true
+        clause_set.integrate_clause(clause!(symbols | q));     // q is true
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, false); // there is no contradiction
@@ -154,10 +154,10 @@ mod tests {
 
         let mut clause_set  = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(~p, q));  // p => q
-        clause_set.integrate_clause(clause!(~q, r));  // q => r
-        clause_set.integrate_clause(clause!(p));      // p is true
-        clause_set.integrate_clause(clause!(~r));     // r is false
+        clause_set.integrate_clause(clause!(symbols | ~p, q));  // p => q
+        clause_set.integrate_clause(clause!(symbols | ~q, r));  // q => r
+        clause_set.integrate_clause(clause!(symbols | p));      // p is true
+        clause_set.integrate_clause(clause!(symbols | ~r));     // r is false
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // there is a contradiction because we can derive r
@@ -172,10 +172,10 @@ mod tests {
 
         let mut clause_set = ClosedClauseSet::new();
 
-        clause_set.integrate_clause(clause!( p,  q));   // p or q
-        clause_set.integrate_clause(clause!(~p,  r));  // not p or r
-        clause_set.integrate_clause(clause!(~p, ~r)); // not p or not r
-        clause_set.integrate_clause(clause!( p, ~q));  // p or not q
+        clause_set.integrate_clause(clause!(symbols |  p,  q));   // p or q
+        clause_set.integrate_clause(clause!(symbols | ~p,  r));  // not p or r
+        clause_set.integrate_clause(clause!(symbols | ~p, ~r)); // not p or not r
+        clause_set.integrate_clause(clause!(symbols |  p, ~q));  // p or not q
 
         // derivation of paradox:
         // (1) p or q       given

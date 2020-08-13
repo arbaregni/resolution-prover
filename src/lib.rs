@@ -20,9 +20,9 @@ pub fn find_proof(givens: &[&str], goal: &str) -> Result<bool, BoxedErrorTrait> 
     // parse the givens and the goal
     let givens = givens
         .iter()
-        .map(|&source| ast::parse_with_symbols(source, &mut symbols))
+        .map(|&source| ast::parse_withsymbols(source, &mut symbols))
         .collect::<Result<Vec<_>, _>>()?;
-    let goal = ast::parse_with_symbols(goal, &mut symbols)?;
+    let goal = ast::parse_withsymbols(goal, &mut symbols)?;
 
     let success = prover::find_proof(&mut symbols, givens, goal)?;
 

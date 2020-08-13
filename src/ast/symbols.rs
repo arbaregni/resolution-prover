@@ -1,5 +1,6 @@
 use std::fmt;
 use std::collections::HashMap;
+use crate::ast::TermMaker;
 
 /// An opaque value representing a singular variable,
 /// where two variables are the same iff their VarId's are equal
@@ -18,6 +19,8 @@ pub struct SymbolTable<'a> {
 
     fun_count: u32,
     functions: HashMap<(&'a str, usize), FunId>, // map function name, arity --> FunId
+
+    pub terms: TermMaker,
 }
 
 impl <'a> SymbolTable<'a> {
@@ -26,7 +29,8 @@ impl <'a> SymbolTable<'a> {
             var_count: 0,
             variables: HashMap::new(),
             fun_count: 0,
-            functions: HashMap::new()
+            functions: HashMap::new(),
+            terms: TermMaker::new(),
         }
     }
     pub fn make_fun(&mut self) -> FunId {

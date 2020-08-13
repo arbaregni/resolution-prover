@@ -11,29 +11,29 @@ use crate::ast::{Term, Substitution};
 #[allow(unused_macros)]
 macro_rules! clause_builder {
     // the base case: the empty clause
-    () => {
+    ($symbols:ident |) => {
         crate::prover::ClauseBuilder::new()
     };
-    ($term:ident) => {
-        $crate::prover::ClauseBuilder::new().set( Term::atom($term), true )
+    ($symbols:ident | $term:ident) => {
+        $crate::prover::ClauseBuilder::new().set( crate::ast::Term::atom($term), true )
     };
-    ( ~ $term:ident) => {
-        crate::prover::ClauseBuilder::new().set( Term::atom($term), false )
+    ($symbols:ident | ~ $term:ident) => {
+        crate::prover::ClauseBuilder::new().set( crate::ast::Term::atom($term), false )
     };
     // the recursive, truthy case
-    ( $term:ident, $($tail:tt)*) => {
-        clause_builder!( $($tail)+ ).set( Term::atom($term), true )
+    ($symbols:ident | $term:ident, $($tail:tt)*) => {
+        clause_builder!( $symbols | $($tail)+ ).set(  crate::ast::Term::atom($term), true )
     };
     // the recursive, falsy case
-    ( ~ $term:ident, $($tail:tt)*) => {
-        clause_builder!( $($tail)* ).set( Term::atom($term), false )
+    ($symbols:ident | ~ $term:ident, $($tail:tt)*) => {
+        clause_builder!( $symbols | $($tail)* ).set( crate::ast::Term::atom($term), false )
     };
 }
 /// Creates and finishes a clause builder on the given terms
 #[macro_export]
 macro_rules! clause {
-    ( $($term:tt)* ) => {
-        clause_builder!( $($term)* ).finish().expect("hard_coded tautology")
+    ( $symbols:ident | $($term:tt)* ) => {
+        clause_builder!( $symbols | $($term)* ).finish().expect("hard_coded tautology")
     }
 }
 

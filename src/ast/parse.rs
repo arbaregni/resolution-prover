@@ -15,11 +15,11 @@ struct Grammar;
 
 pub fn parse(source: &str) -> Result<(SymbolTable, Expr), BoxedErrorTrait> {
     let mut symbols = SymbolTable::new();
-    let expr = parse_with_symbols(source, &mut symbols)?;
+    let expr = parse_withsymbols(source, &mut symbols)?;
     Ok( (symbols, expr) )
 }
 
-pub fn parse_with_symbols<'a>(source: &'a str, symbols: &mut SymbolTable<'a>) -> Result<Expr<'a>, BoxedErrorTrait> {
+pub fn parse_withsymbols<'a>(source: &'a str, symbols: &mut SymbolTable<'a>) -> Result<Expr<'a>, BoxedErrorTrait> {
     // pest (essentially) tokenizes it for us,
     // all we have to do is deal with operator precedence
     // and converting into Expr structs
