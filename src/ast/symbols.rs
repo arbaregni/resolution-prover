@@ -74,11 +74,40 @@ impl <'a> SymbolTable<'a> {
             }
         }
     }
+    /// A count of how many symbols there are
+    pub fn count(&self) -> usize {
+        (self.var_count + self.fun_count) as usize
+    }
+    /// Iterate over all the symbols in the table
+    pub fn symbols(&self) -> impl Iterator<Item = Symbol> {
+        let vars = (0..self.var_count)
+            .map(|id| VarId(id).into());
+        let funs = (0..self.fun_count)
+            .map(|id| FunId(id).into());
+        vars.chain(funs)
+    }
 }
 
 /// Opaque wrapper struct for dealing with variable shadows and scoping while parsing
 /// Stores the information necessary to restore a binding that has been shadowed
 pub struct ShadowInformation<'a>(&'a str, Option<VarId>);
+
+#[derive(Copy, Clone, Debug)]
+pub enum Symbol {
+    Var(VarId),
+    Fun(FunId),
+}
+
+impl From<VarId> for Symbol {
+    fn from(v: VarId) -> Self {
+        Symbol::Var(v)
+    }
+}
+impl From<FunId> for Symbol {
+    fn from(f: FunId) -> Self {
+        Symbol::Fun(f)
+    }
+}
 
 impl fmt::Debug for VarId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

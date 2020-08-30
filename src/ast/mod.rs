@@ -14,7 +14,7 @@ pub use parse::*;
 #[cfg(test)]
 mod tests {
     use crate::ast::{ExprKind, Term, Expr, SymbolTable};
-    use crate::prover::ClosedClauseSet;
+    use crate::prover::{UnprocessedClauseSet};
     use crate::ast;
 
     #[test]
@@ -508,7 +508,7 @@ mod tests {
         // (day and night) or (love and war)
         // (day or (love and war)) and (night or (love and war))
         // (day or love) and (day or war) and (night or love) and (night or war)
-        let mut clause_set  = ClosedClauseSet::new();
+        let mut clause_set  = UnprocessedClauseSet::new();
         expr.into_clauses(&mut symbols, &mut clause_set).expect("should not fail");
 
         assert_eq!(clause_set.clauses.len(), 4);
@@ -521,7 +521,7 @@ mod tests {
     fn to_clauses_1() {
         let (mut symbols, expr) = ast::parse("((a => b) and (b => c)) => (a => c)").expect("should not fail");
 
-        let mut clause_set  = ClosedClauseSet::new();
+        let mut clause_set  = UnprocessedClauseSet::new();
         expr.into_clauses(&mut symbols, &mut clause_set).expect("should not error");
 
         assert_eq!(clause_set.clauses.len(), 0);

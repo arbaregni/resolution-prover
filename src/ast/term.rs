@@ -1,4 +1,4 @@
-use crate::ast::{Expr, ExprKind, VarId, FunId};
+use crate::ast::{Expr, ExprKind, VarId, FunId, Symbol};
 use TermKind::*;
 
 use std::{fmt, iter};
@@ -151,6 +151,64 @@ impl Term {
             }
         }
     }
+    /// Attempt to find a substitution σ such that σ(`self`) = `other`
+    pub fn left_unify(&self, other: &Term) -> Option<Substitution> {
+        match (self.kind.deref(), other.kind.deref()) {
+            (Variable(x), _) => {
+                // variable must not occur in other
+                if other.contains(x) { return None; }
+                let mut sub = Substitution::new();
+                if self != other {
+                    sub.insert(*x, other.clone());
+                }
+                Some(sub)
+            }
+            (Function(f, args_f), Function(g, args_g)) => {
+                if f != g {
+                    return None; // can not match if names (and implicitly, arities) are different
+                }
+                let mut sub = Substitution::new();
+                for (left, right) in args_f.iter().zip(args_g.iter()) {
+                    let new = left.left_unify(right)?;
+                    sub = merge(sub, new)?;
+                }
+                Some(sub)
+            }
+            (Function(_, _), Variable(_)) => None,
+        }
+    }
+    /// Count the number of times `symbol` occurs in `self`
+    pub fn count_symbol(&self, symbol: Symbol) -> u32 {
+        match symbol {
+            Symbol::Var(v) => self.count_var(v),
+            Symbol::Fun(f) => self.count_fun(f),
+        }
+    }
+    /// Count the number of times the symbol `var_id` occurs in `self`
+    pub fn count_var(&self, var_id: VarId) -> u32 {
+        match self.kind.deref() {
+            Variable(v) => {
+                if *v == var_id { 1 } else { 0 }
+            },
+            Function(_, args) => {
+                args.iter()
+                    .map(|t| t.count_var(var_id))
+                    .sum()
+            }
+        }
+    }
+    /// Count the number of times the symbol `fun_id` occurs in `self`
+    pub fn count_fun(&self, fun_id: FunId) -> u32 {
+        match self.kind.deref() {
+            Variable(_) => 0,
+            Function(f, args) => {
+                let inner_count = args.iter()
+                    .map(|t| t.count_fun(fun_id))
+                    .sum();
+                if *f == fun_id { inner_count + 1 } else { inner_count }
+            }
+        }
+    }
 }
 
 impl iter::Iterator for SubTermIterator {
@@ -174,7 +232,7 @@ impl iter::Iterator for SubTermIterator {
 }
 
 /// if you performed `sub`, and then `new`, the result is `compose(sub, new)`
-fn compose(sub: Substitution, new: Substitution) -> Substitution {
+pub fn compose(sub: Substitution, new: Substitution) -> Substitution {
     let mut composition = Substitution::new();
     // perform the new substitution in all the existing mappings
     for (k, v) in sub.into_iter() {
@@ -187,6 +245,19 @@ fn compose(sub: Substitution, new: Substitution) -> Substitution {
     composition
 }
 
+pub fn merge(sub0: Substitution, sub1: Substitution) -> Option<Substitution> {
+    let mut merged = sub0;
+    for (var, term) in sub1.into_iter() {
+        if let Some(mapped) = merged.get(&var) {
+            if mapped != &term {
+                return None;
+            }
+        } else {
+            merged.insert(var, term);
+        }
+    }
+    Some(merged)
+}
 
 impl fmt::Debug for Term {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -443,5 +514,9 @@ mod tests {
         let mgu = left.unify(&right);
 
         assert_eq!(mgu, None);  // can not unify without infinite descent
+    }
+    #[test]
+    fn left_unify_0() {
+
     }
 }

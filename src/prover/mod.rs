@@ -1,3 +1,4 @@
+mod feature_index;
 #[macro_use]
 mod clause;
 pub use clause::*;
@@ -13,7 +14,7 @@ use crate::error::BoxedErrorTrait;
 /// Uses proof by contradiction to search for a proof of `goal` from `givens`
 /// If it runs without internal error, returns `Ok(true)` if such a proof is found
 pub fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr>, goal: Expr) -> Result<bool, BoxedErrorTrait> {
-    let mut clause_set = ClosedClauseSet::new();
+    let mut clause_set = UnprocessedClauseSet::new();
     // enter all the givens
     for expr in givens {
         expr.into_clauses(symbols, &mut clause_set)?;
@@ -33,8 +34,9 @@ pub fn find_proof(symbols: &mut SymbolTable, givens: Vec<Expr>, goal: Expr) -> R
 
 #[cfg(test)]
 mod tests {
-    use crate::prover::{Clause, ClosedClauseSet, find_proof, ClauseBuilder};
+    use crate::prover::{Clause, find_proof, ClauseBuilder, UnprocessedClauseSet};
     use crate::ast::{ExprKind, Term, SymbolTable};
+    use std::rc::Rc;
 
     #[test]
     fn resolution_simple_0() {
@@ -78,26 +80,12 @@ mod tests {
         assert_eq!(Clause::resolve(&a, &b), Some(clause!(~m, q)));
     }
 
-    #[test]
-    fn clause_intern_0() {
-        let mut symbols = SymbolTable::new();
-        let p = symbols.make_fun();
-        let q = symbols.make_fun();
-        let r = symbols.make_fun();
-
-        let mut interner = ClosedClauseSet::new();
-
-        let a = interner.integrate_clause(clause!(p, ~q, r));
-        let b = interner.integrate_clause(clause!(p, ~q, r));
-        assert_eq!(a, b);
-    }
-
 
     #[test]
     fn satisfy_simple_0() {
-        let mut clause_set = ClosedClauseSet::new();
+        let mut clause_set = UnprocessedClauseSet::new();
 
-        clause_set.integrate_clause(clause!()); // contradiction immediately
+        clause_set.insert(Rc::new(clause!())); // contradiction immediately
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // should recognize the immediate contradiction
@@ -107,10 +95,10 @@ mod tests {
         let mut symbols = SymbolTable::new();
         let p = symbols.make_fun();
 
-        let mut clause_set = ClosedClauseSet::new();
+        let mut clause_set = UnprocessedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(p));
-        clause_set.integrate_clause(clause!(~p));
+        clause_set.insert(Rc::new(clause!(p)));
+        clause_set.insert(Rc::new(clause!(~p)));
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // both q and ~q is a contradiction
@@ -121,11 +109,11 @@ mod tests {
         let p = symbols.make_fun();
         let q = symbols.make_fun();
 
-        let mut clause_set = ClosedClauseSet::new();
+        let mut clause_set = UnprocessedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(p, q)); // p or q
-        clause_set.integrate_clause(clause!(~p));   // not p, so q is true
-        clause_set.integrate_clause(clause!(~q));   // q is not true
+        clause_set.insert(Rc::new(clause!(p, q))); // p or q
+        clause_set.insert(Rc::new(clause!(~p)));   // not p, so q is true
+        clause_set.insert(Rc::new(clause!(~q)));   // q is not true
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // both q and ~q is a contradiction
@@ -136,11 +124,11 @@ mod tests {
         let p = symbols.make_fun();
         let q = symbols.make_fun();
 
-        let mut clause_set= ClosedClauseSet::new();
+        let mut clause_set= UnprocessedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(~p, q)); // p => q
-        clause_set.integrate_clause(clause!(p));     // p is true
-        clause_set.integrate_clause(clause!(q));     // q is true
+        clause_set.insert(Rc::new(clause!(~p, q))); // p => q
+        clause_set.insert(Rc::new(clause!(p)));     // p is true
+        clause_set.insert(Rc::new(clause!(q)));     // q is true
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, false); // there is no contradiction
@@ -152,12 +140,12 @@ mod tests {
         let q = symbols.make_fun();
         let r = symbols.make_fun();
 
-        let mut clause_set  = ClosedClauseSet::new();
+        let mut clause_set  = UnprocessedClauseSet::new();
 
-        clause_set.integrate_clause(clause!(~p, q));  // p => q
-        clause_set.integrate_clause(clause!(~q, r));  // q => r
-        clause_set.integrate_clause(clause!(p));      // p is true
-        clause_set.integrate_clause(clause!(~r));     // r is false
+        clause_set.insert(Rc::new(clause!(~p, q)));  // p => q
+        clause_set.insert(Rc::new(clause!(~q, r)));  // q => r
+        clause_set.insert(Rc::new(clause!(p)));      // p is true
+        clause_set.insert(Rc::new(clause!(~r)));     // r is false
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, true); // there is a contradiction because we can derive r
@@ -170,12 +158,12 @@ mod tests {
         let q = symbols.make_fun();
         let r = symbols.make_fun();
 
-        let mut clause_set = ClosedClauseSet::new();
+        let mut clause_set = UnprocessedClauseSet::new();
 
-        clause_set.integrate_clause(clause!( p,  q));   // p or q
-        clause_set.integrate_clause(clause!(~p,  r));  // not p or r
-        clause_set.integrate_clause(clause!(~p, ~r)); // not p or not r
-        clause_set.integrate_clause(clause!( p, ~q));  // p or not q
+        clause_set.insert(Rc::new(clause!( p,  q)));   // p or q
+        clause_set.insert(Rc::new(clause!(~p,  r)));  // not p or r
+        clause_set.insert(Rc::new(clause!(~p, ~r))); // not p or not r
+        clause_set.insert(Rc::new(clause!( p, ~q)));  // p or not q
 
         // derivation of paradox:
         // (1) p or q       given
@@ -199,7 +187,7 @@ mod tests {
         let q = symbols.make_fun();
         let a = symbols.make_fun();
 
-        let mut clause_set = ClosedClauseSet::new();
+        let mut clause_set = UnprocessedClauseSet::new();
 
         // P(x) implies Q(x)
         let clause = ClauseBuilder::new()
@@ -210,7 +198,7 @@ mod tests {
                 Term::variable(x),
             ]), true)
             .finish().expect("not a tautology");
-        clause_set.integrate_clause(clause);
+        clause_set.insert(Rc::new(clause)) ;
 
         // P(a)
         let clause = ClauseBuilder::new()
@@ -218,20 +206,10 @@ mod tests {
                 Term::atom(a),
             ]), true)
             .finish().expect("not a tautology");
-        clause_set.integrate_clause(clause);
+        clause_set.insert(Rc::new(clause));
 
         let success = clause_set.has_contradiction().expect("should not error");
         assert_eq!(success, false);
-
-        // make sure that we've derived what Q(a)
-        let clause = ClauseBuilder::new()
-            .set(Term::predicate(q, vec![
-                Term::atom(a),
-            ]), true)
-            .finish().expect("not a tautology");
-
-        println!("{:#?}", clause_set);
-        assert!(clause_set.clauses.contains(&clause));
     }
     #[test]
     fn satisfy_fol_1() {
@@ -241,7 +219,7 @@ mod tests {
         let p = symbols.make_fun();
         let a = symbols.make_fun();
 
-        let mut clause_set = ClosedClauseSet::new();
+        let mut clause_set = UnprocessedClauseSet::new();
 
         // P(x) or P(y)
         let clause = ClauseBuilder::new()
@@ -252,7 +230,7 @@ mod tests {
                 Term::variable(y),
             ]), true)
             .finish().expect("not a tautology");
-        clause_set.integrate_clause(clause);
+        clause_set.insert(Rc::new(clause));
 
         // ~P(a)
         let clause = ClauseBuilder::new()
@@ -260,7 +238,7 @@ mod tests {
                 Term::atom(a),
             ]), false)
             .finish().expect("not a tautology");
-        clause_set.integrate_clause(clause);
+        clause_set.insert(Rc::new(clause));
 
         let success = clause_set.has_contradiction().expect("should not error");
         // derivation:
@@ -269,7 +247,6 @@ mod tests {
         // P(a)           unify x with a
         // ~P(a)
         // contradiction!
-        println!("{:#?}", clause_set);
         assert_eq!(success, true);
     }
     #[test]
@@ -316,10 +293,10 @@ mod tests {
                 ])
             ]), false)
             .finish().expect("not a tautology");
-        let mut clause_set = ClosedClauseSet::new();
-        clause_set.integrate_clause(clause_0);
-        clause_set.integrate_clause(clause_1);
-        clause_set.integrate_clause(clause_2);
+        let mut clause_set = UnprocessedClauseSet::new();
+        clause_set.insert(Rc::new(clause_0));
+        clause_set.insert(Rc::new(clause_1));
+        clause_set.insert(Rc::new(clause_2));
 
         // clause_set.term_tree.pretty_print(&mut std::io::stdout()).unwrap();
 
@@ -333,7 +310,6 @@ mod tests {
         // 5. ~P(f(f(w)))        resolve (4) and (2) with x = f(w)
         // 6. :(
 
-        println!("{:#?}", clause_set);
         assert_eq!(success, true);
 
     }

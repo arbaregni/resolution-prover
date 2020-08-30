@@ -1,10 +1,11 @@
 use map_in_place::MapVecInPlace;
 use std::fmt::Formatter;
-use crate::prover::{ClosedClauseSet, ClauseBuilder};
+use crate::prover::{ClauseBuilder, UnprocessedClauseSet};
 use std::{fmt, iter};
 
 use crate::error::*;
 use crate::ast::{Term, VarId, SymbolTable, Substitution};
+use std::rc::Rc;
 
 /// A high level expression of first order terms
 #[derive(PartialEq, Eq, Clone)]
@@ -314,7 +315,7 @@ impl <'a> Expr<'a> {
     ///  - if any expr kind other than `Or`, `And`, `Not`, and `Literal` are present
     ///  - if `Not` surround anything but a `Literal`
     ///  - if `Or`s surround any `And`s
-    pub fn make_clause_set(self, clause_set: &mut ClosedClauseSet) -> Result<(), BoxedErrorTrait>{
+    pub fn make_clause_set(self, clause_set: &mut UnprocessedClauseSet) -> Result<(), BoxedErrorTrait>{
         // println!("making into a clause set: {:#?}", self);
         use ExprKind::*;
         match *self.kind {
@@ -323,7 +324,7 @@ impl <'a> Expr<'a> {
                 let mut builder = ClauseBuilder::new();
                 self.make_clause(&mut builder)?;
                 if let Some(clause) = builder.finish() {
-                    clause_set.integrate_clause(clause);
+                    clause_set.insert(Rc::new(clause));
                 }
             }
             And(exprs) => {
@@ -369,7 +370,7 @@ impl <'a> Expr<'a> {
 
     /// Convert an expression to clausal normal form,
     /// inserting all new clauses into the clause set
-    pub fn into_clauses(self, symbols: &mut SymbolTable, clause_set: &mut ClosedClauseSet) -> Result<(), BoxedErrorTrait> {
+    pub fn into_clauses(self, symbols: &mut SymbolTable, clause_set: &mut UnprocessedClauseSet) -> Result<(), BoxedErrorTrait> {
         // println!("converting: {:?}", self);
         self
             .normalize_negations()

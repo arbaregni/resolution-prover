@@ -5,7 +5,7 @@ use std::collections::{BTreeMap};
 use itertools::Itertools;
 use std::cmp::Ordering;
 
-use crate::ast::{Term, Substitution};
+use crate::ast::{Term, Substitution, compose};
 
 /// A recursive macro that builds a clause from terms
 #[allow(unused_macros)]
@@ -171,14 +171,76 @@ impl Clause {
         }
         Some( Clause { terms: resolvant_terms } )
     }
+    /// Apply a substitution and merge all of the identical terms,
+    /// possibly returning `None` if a tautology is created
+    pub fn factor_under_substitution(&self, sub: &Substitution) -> Option<Clause> {
+        let mut builder = ClauseBuilder::new();
+        for (term, truth_value) in self.iter() {
+            let mapped = term.substitute(sub);
+            builder.insert(mapped, *truth_value);
+        }
+        builder.finish()
+    }
+    /// Returns true iff `self` subsumes by `other`
+    /// That is, there is a substitution σ such that σ(`self`) is a subset of `other`.
+    /// This is _not_ strict subsumption, where every literally in `other` would be matched
+    pub fn subsumes(&self, other: &Clause) -> bool {
+        fn match_terms(terms: &[(Term, bool)], other: &Clause, sub: Substitution) -> bool {
+            let ((term, truth_value), rest) = match terms.split_first() {
+                Some(thing) => thing,
+                None => {
+                    println!("subsuming with σ = {:?}", sub);
+                    return true; // made it to the end
+                },
+            };
+            let term = term.substitute(&sub);
+            // try to match `term` with every possible term in `other` with the corresponding truth value
+            let iter = other.iter()
+                .filter(|(_, tv)| tv == truth_value)
+                .map(|(t, _)| t);
+            for other_term in iter {
+                let new = match term.left_unify(other_term) {
+                    Some(new) => {
+                        compose(sub.clone(), new)
+                    },
+                    None => continue,
+                };
+                if match_terms(rest, other, new) {
+                    return true; // we have a success!
+                }
+            }
+            false // none of the recursive calls were successful
+        }
+        match_terms(&self.terms, other, Substitution::new())
+    }
     /// Returns true if this is the empty clause, i.e falso
     pub fn is_empty(&self) -> bool {
         self.terms.is_empty()
+    }
+    /// Returns true if this clause contains the term with that truth value
+    pub fn contains(&self, term: &Term, truth_value: bool) -> bool {
+        for (contained_term, contained_truth_value) in self.terms.iter() {
+            if contained_term == term && *contained_truth_value == truth_value { return true; }
+        }
+        false
     }
     /// Iterates over underlying vector
     pub fn iter(&self) -> impl Iterator<Item = &(Term, bool)> {
         self.terms.iter()
     }
+    /// Iterates over positive terms
+    pub fn iter_pos(&self) -> impl Iterator<Item = &Term> {
+        self.terms.iter()
+            .filter(|(_, truth_value)| *truth_value) // keep if truth_value is TRUE
+            .map(|(t, _)| t)
+    }
+    /// Iterates over negative terms
+    pub fn iter_neg(&self) -> impl Iterator<Item = &Term> {
+        self.terms.iter()
+            .filter(|(_, truth_value)| !*truth_value) // keep if truth_value is FALSE
+            .map(|(t, _)| t)
+    }
+
 }
 
 
@@ -202,3 +264,189 @@ impl fmt::Debug for Clause {
     }
 }
 
+#[cfg(test)]
+mod subsumption_tests {
+    use crate::ast::{SymbolTable, Term};
+    use crate::prover::ClauseBuilder;
+
+    #[test]
+    fn it_works_0() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+        let a = symbols.make_fun();
+        let x = symbols.make_var();
+
+        // { P($x), Q($x) }
+        let first = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(x)]), true)
+            .set(Term::predicate(q, vec![Term::variable(x)]), true)
+            .finish().unwrap();
+
+        // { P(a), Q(a) }
+        let second = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::atom(a)]), true)
+            .set(Term::predicate(q, vec![Term::atom(a)]), true)
+            .finish().unwrap();
+
+        assert_eq!(first.subsumes(&second), true); // by σ = {$x: a}
+    }
+    #[test]
+    fn it_works_1() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let a = symbols.make_fun();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+
+        // { P($x, a), P($y, $x) }
+        let first = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(x), Term::atom(a)]), true)
+            .set(Term::predicate(p, vec![Term::variable(y), Term::variable(x)]), true)
+            .finish().unwrap();
+
+        // { P(a, a) }
+        let second = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::atom(a), Term::atom(a)]), true)
+            .finish().unwrap();
+
+        assert_eq!(first.subsumes(&second), true); // by σ = {$x: a, $y: a}
+    }
+    #[test]
+    fn different_truth_value() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+
+        // { P($x) }
+        let first = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(x)]), true)
+            .finish().unwrap();
+
+        // { ~P($y) }
+        let second = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(y)]), false)
+            .finish().unwrap();
+
+        assert_eq!(first.subsumes(&second), false); // not subsumed
+    }
+    #[test]
+    fn restrictive_variables() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+        let z = symbols.make_var();
+
+        // { P($x, $x) }
+        let first = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(x), Term::variable(x)]), true)
+            .finish().unwrap();
+
+        // { P($y, $z) }
+        let second = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(y), Term::variable(z)]), true)
+            .finish().unwrap();
+
+        assert_eq!(first.subsumes(&second), false); // not subsumed
+    }
+    #[test]
+    fn different_functions() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let q = symbols.make_fun();
+        let a = symbols.make_fun();
+        let b = symbols.make_fun();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+
+        // { P($x, a), Q($x, $y) }
+        let first = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(x), Term::atom(a)]), true)
+            .set(Term::predicate(q, vec![Term::variable(x), Term::variable(y)]), true)
+            .finish().unwrap();
+
+        // { P(b, b), P(b, a) }
+        let second = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::atom(b), Term::atom(b)]), true)
+            .set(Term::predicate(p, vec![Term::atom(b), Term::atom(a)]), true)
+            .finish().unwrap();
+
+        assert_eq!(first.subsumes(&second), false); // not subsumed
+    }
+    #[test]
+    fn it_works_2() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let a = symbols.make_fun();
+        let b = symbols.make_fun();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+        let z = symbols.make_var();
+
+        // { P($x, $x), P($x, $y), P($y, $z) }
+        let first = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(x), Term::variable(x)]), true)
+            .set(Term::predicate(p, vec![Term::variable(x), Term::variable(y)]), true)
+            .set(Term::predicate(p, vec![Term::variable(y), Term::variable(z)]), true)
+            .finish().unwrap();
+
+        // { P(a, a), P(b, b) }
+        let second = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::atom(a), Term::atom(a)]), true)
+            .set(Term::predicate(p, vec![Term::atom(b), Term::atom(b)]), true)
+            .finish().unwrap();
+
+        assert_eq!(first.subsumes(&second), true); // subsumed by {$x: a, $y: a, $z: a}  (not strict)
+    }
+    #[test]
+    fn not_unifiable() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let f = symbols.make_fun();
+        let g = symbols.make_fun();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+        let u = symbols.make_var();
+
+        // { P(f($x), $y) }
+        let first = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(x), Term::predicate(f,
+                                                                            vec![Term::variable(y)]
+            )]), true)
+            .finish().unwrap();
+
+        // { P($u, g($u)) }
+        let second = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(u), Term::predicate(g,
+                                                                            vec![Term::variable(u)]
+            )]), true)
+            .finish().unwrap();
+
+        assert_eq!(first.subsumes(&second), false); // not subsumed
+    }
+    #[test]
+    fn not_subset() {
+        let mut symbols = SymbolTable::new();
+        let p = symbols.make_fun();
+        let a = symbols.make_fun();
+        let x = symbols.make_var();
+        let y = symbols.make_var();
+        let z = symbols.make_var();
+
+        // { P($x, $x), P($y, $x) }
+        let first = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(x), Term::variable(x)]), true)
+            .set(Term::predicate(p, vec![Term::variable(y), Term::variable(x)]), true)
+            .finish().unwrap();
+
+        // { P($z, a) }
+        let second = ClauseBuilder::new()
+            .set(Term::predicate(p, vec![Term::variable(z), Term::atom(a)]), true)
+            .finish().unwrap();
+
+        assert_eq!(first.subsumes(&second), false); // not subsumed
+    }
+
+}
