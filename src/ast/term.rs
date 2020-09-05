@@ -1,4 +1,4 @@
-use crate::ast::{Expr, ExprKind, VarId, FunId, Symbol};
+use crate::ast::{Expr, ExprKind, VarId, FunId, Symbol, SymbolTable};
 use TermKind::*;
 
 use std::{fmt};
@@ -187,6 +187,31 @@ impl Term {
                     .map(|t| t.count_fun(fun_id))
                     .sum();
                 if *f == fun_id { inner_count + 1 } else { inner_count }
+            }
+        }
+    }
+    /// Return a string of the term with original names restored
+    pub fn demangled(&self, symbols: &SymbolTable) -> String {
+        match self.kind.deref() {
+            Variable(v) => symbols.demangle(Symbol::Var(*v)),
+            Function(f, args) => {
+                let mut s = String::new();
+                let name = symbols.demangle(Symbol::Fun(*f));
+                s.push_str(&name);
+                if !args.is_empty() {
+                    let mut first = true;
+                    for arg in args {
+                        if first {
+                            first = false;
+                            s.push('(');
+                        } else {
+                            s.push_str(", ");
+                        }
+                        s.push_str(&arg.demangled(symbols));
+                    }
+                    s.push(')');
+                }
+                s
             }
         }
     }

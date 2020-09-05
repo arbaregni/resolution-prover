@@ -18,6 +18,8 @@ pub struct SymbolTable<'a> {
 
     fun_count: u32,
     functions: HashMap<(&'a str, usize), FunId>, // map function name, arity --> FunId
+
+    demangle: HashMap<Symbol, &'a str>, // maps symbols -> names
 }
 
 impl <'a> SymbolTable<'a> {
@@ -26,7 +28,8 @@ impl <'a> SymbolTable<'a> {
             var_count: 0,
             variables: HashMap::new(),
             fun_count: 0,
-            functions: HashMap::new()
+            functions: HashMap::new(),
+            demangle: HashMap::new(),
         }
     }
     pub fn make_fun(&mut self) -> FunId {
@@ -51,6 +54,7 @@ impl <'a> SymbolTable<'a> {
         } else {
             let fun_id = self.make_fun();
             self.functions.insert(k, fun_id);
+            self.demangle.insert(Symbol::Fun(fun_id), name);
             fun_id
         };
         fun_id
@@ -59,6 +63,7 @@ impl <'a> SymbolTable<'a> {
     pub fn shadow_var(&mut self, name: &'a str) -> (VarId, ShadowInformation<'a>) {
         let var = self.make_var();
         let opt_prev = self.variables.insert(name, var);
+        self.demangle.insert(Symbol::Var(var), name);
         (var, ShadowInformation(name, opt_prev))
     }
     /// Restore the previous binding based on `shadow_info`
@@ -67,6 +72,7 @@ impl <'a> SymbolTable<'a> {
             ShadowInformation(name, Some(var)) => {
                 // there was something previous, we can restore it with the shadow information
                 self.variables.insert(name, var);
+                self.demangle.insert(Symbol::Var(var), name);
             }
             ShadowInformation(name, None) => {
                 // there was nothing previous, we want to remove whatever's there now
@@ -86,13 +92,24 @@ impl <'a> SymbolTable<'a> {
             .map(|id| FunId(id).into());
         vars.chain(funs)
     }
+    /// Return the name of the given symbol, or else stringify it as it is
+    pub fn demangle(&self, symbol: Symbol) -> String {
+        self.demangle.get(&symbol)
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| {
+                match symbol {
+                    Symbol::Fun(f) => format!("{:?}", f),
+                    Symbol::Var(v) => format!("{:?}", v),
+                }
+            })
+    }
 }
 
 /// Opaque wrapper struct for dealing with variable shadows and scoping while parsing
 /// Stores the information necessary to restore a binding that has been shadowed
 pub struct ShadowInformation<'a>(&'a str, Option<VarId>);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum Symbol {
     Var(VarId),
     Fun(FunId),

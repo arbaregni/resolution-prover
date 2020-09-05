@@ -5,7 +5,7 @@ use std::collections::{BTreeMap};
 use itertools::Itertools;
 use std::cmp::Ordering;
 
-use crate::ast::{Term, Substitution, compose};
+use crate::ast::{Term, Substitution, compose, SymbolTable};
 
 /// A recursive macro that builds a clause from terms
 #[allow(unused_macros)]
@@ -240,7 +240,27 @@ impl Clause {
             .filter(|(_, truth_value)| !*truth_value) // keep if truth_value is FALSE
             .map(|(t, _)| t)
     }
-
+    /// Return a string of the clause with original names restored
+    pub fn demangled(&self, symbols: &SymbolTable) -> String {
+        let mut s = String::new();
+        s.push('{');
+        let mut first = true;
+        for (term, truth_value) in self.terms.iter() {
+            if !first {
+                s.push_str(", ");
+            }
+            first = false;
+            if *truth_value {
+                // positive term = no tilde
+            } else {
+                // negated term = tilde
+                s.push('~');
+            }
+            s.push_str(&term.demangled(symbols));
+        }
+        s.push('}');
+        s
+    }
 }
 
 
