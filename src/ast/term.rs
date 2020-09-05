@@ -1,7 +1,7 @@
 use crate::ast::{Expr, ExprKind, VarId, FunId, Symbol};
 use TermKind::*;
 
-use std::{fmt, iter};
+use std::{fmt};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::ops::Deref;
@@ -22,6 +22,7 @@ pub enum TermKind {
 /// Variable names are mapped to Literal Expressions
 pub type Substitution = HashMap<VarId, Term>;
 
+
 /// The highest level pattern of a term.
 ///   For instance,
 /// `P(f(a, b, ...), g(h(i(...))))` is represented only
@@ -33,12 +34,6 @@ pub enum TermPattern {
     Variable,
     /// Representing a function with the given name and arity
     Function(FunId),
-}
-
-/// Iterates over all expressions and sub_expressions in the given term
-#[derive(Debug, Clone)]
-pub struct SubTermIterator {
-    stack: Vec<Term>,
 }
 
 impl TermKind {
@@ -82,20 +77,6 @@ impl Term {
         match self.kind() {
             TermKind::Variable(_) => EMPTY_TERM_SLICE,
             TermKind::Function(_, args) => args.as_slice(),
-        }
-    }
-    pub fn is_variable(&self) -> bool {
-        if let TermKind::Variable(_) = self.kind() {
-            true
-        } else {
-            false
-        }
-    }
-    pub fn is_function(&self) -> bool {
-        if let TermKind::Function(_, _) = self.kind() {
-            true
-        } else {
-            false
         }
     }
     /// Perform the given substitution, producing a new literal expression
@@ -211,23 +192,12 @@ impl Term {
     }
 }
 
-impl iter::Iterator for SubTermIterator {
-    type Item = Term;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(term) = self.stack.pop() {
-            for child in term.children() {
-                self.stack.push(child.clone());
-            }
-            Some(term)
-        } else {
-            None
-        }
+impl TermPattern {
+    pub fn is_function(&self) -> bool {
+        if let TermPattern::Function(_) = self { true } else { false }
     }
-    /// We know that there are at least some number of terms waiting to be yielded,
-    /// and we don't have an upper bound
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.stack.len(), None)
+    pub fn is_variable(&self) -> bool {
+        if let TermPattern::Variable = self { true } else { false }
     }
 }
 

@@ -68,7 +68,6 @@ impl KeptClauseSet {
     /// Inserts the clause, updating the record-keeping data structures
     pub fn integrate_clause(&mut self, clause: Rc<Clause>) -> Result<(), BoxedErrorTrait> {
         println!("integrating clause: {:?}", clause);
-        println!("term_tree: {:#?}", self.term_tree);
 
         let made_insertion = self.clauses.insert(Rc::clone(&clause));
         if !made_insertion {
@@ -83,6 +82,7 @@ impl KeptClauseSet {
                 .insert(*truth_value, Rc::clone(&clause))
         }
         // search for inferences by testing each term in the query clause in turn
+        println!("term_tree: {:#?}", self.term_tree);
 
         let mut partners = HashMap::new(); // maps clauses -> pairs of unifiers & a count of the number of terms that lead us to include that clause and unifier
         let mut factors = Vec::new(); // substitutions that could factor the query clause
@@ -92,7 +92,6 @@ impl KeptClauseSet {
                 println!("  query term: {:?} unifies with {:?}", query_term, term);
                 let occr = self.occurrences.get(&term).expect("missing occurrences for term");
                 // each clause with the same term (up to unification) but opposite truth value is a potential partner
-                println!("  occurrences for {:?}: {:?}", term, occr);
                 for partner_clause in occr.get(!*truth_value) {
                     if *partner_clause == clause { continue; }
                     println!("  possible partner: {:?}", partner_clause);
