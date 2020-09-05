@@ -95,7 +95,11 @@ impl <'a> SymbolTable<'a> {
     /// Return the name of the given symbol, or else stringify it as it is
     pub fn demangle(&self, symbol: Symbol) -> String {
         self.demangle.get(&symbol)
-            .map(|name| name.to_string())
+            .map(|name| if let Symbol::Var(_) = symbol {
+                format!("${}", name)
+            } else {
+                format!("{}", name)
+            })
             .unwrap_or_else(|| {
                 match symbol {
                     Symbol::Fun(f) => format!("{:?}", f),
