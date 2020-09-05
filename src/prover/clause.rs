@@ -189,7 +189,6 @@ impl Clause {
             let ((term, truth_value), rest) = match terms.split_first() {
                 Some(thing) => thing,
                 None => {
-                    println!("subsuming with σ = {:?}", sub);
                     return true; // made it to the end
                 },
             };

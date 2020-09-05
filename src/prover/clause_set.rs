@@ -1,7 +1,7 @@
 use crate::prover::{Clause, TermTree, ClauseBuilder};
 use indexmap::set::IndexSet;
 use std::collections::{HashMap, HashSet, VecDeque};
-use crate::ast::{Term, Substitution};
+use crate::ast::{Term, Substitution, SymbolTable};
 use crate::error::BoxedErrorTrait;
 use crate::prover::feature_index::SubsumptionTree;
 use std::rc::Rc;
@@ -35,40 +35,8 @@ impl KeptClauseSet {
             inferences: VecDeque::new(),
         }
     }
-    /// Returns a vector of all clauses we can get by applying unifying terms inside the clause
-    /// For instance:
-    ///    `{P($x), P($y), Q($x, $y)}` may be factored to:
-    ///     `{P($x), Q($x, $x)}` via `$y -> $x`
-    ///     `{P($y), Q($y, $y)}` via `$x -> $y`
-    pub fn factors(&self, clause: &Clause) -> Vec<Clause> {
-        // test pairwise for possible unifiers
-        let mut subs = Vec::new();
-        for (x, x_truth) in clause.iter() {
-            for (y, y_truth) in clause.iter() {
-                if *x_truth != *y_truth { continue; }
-                if let Some(sub) = x.unify(y) {
-                    if sub.is_empty() { continue; }
-                    subs.push(sub);
-                }
-            }
-        }
-        // apply each of those unifiers to our clause and reduce
-        subs.into_iter()
-            .filter_map(|sub| {
-                let mut builder = ClauseBuilder::new();
-                for (term, truth_value) in clause.iter() {
-                    // apply the substitution and insert the term
-                    let mapped = term.substitute(&sub);
-                    builder.insert(mapped, *truth_value);
-                }
-                builder.finish() // tautologies will get filtered out
-            })
-            .collect::<Vec<_>>()
-    }
     /// Inserts the clause, updating the record-keeping data structures
     pub fn integrate_clause(&mut self, clause: Rc<Clause>) -> Result<(), BoxedErrorTrait> {
-        println!("integrating clause: {:?}", clause);
-
         let made_insertion = self.clauses.insert(Rc::clone(&clause));
         if !made_insertion {
             return Ok(()); // the clause was already present so there is no need to do further processing
@@ -82,19 +50,19 @@ impl KeptClauseSet {
                 .insert(*truth_value, Rc::clone(&clause))
         }
         // search for inferences by testing each term in the query clause in turn
-        println!("term_tree: {:#?}", self.term_tree);
+        // println!("term_tree: {:#?}", self.term_tree);
 
         let mut partners = HashMap::new(); // maps clauses -> pairs of unifiers & a count of the number of terms that lead us to include that clause and unifier
         let mut factors = Vec::new(); // substitutions that could factor the query clause
 
         for (query_term, truth_value) in clause.iter() {
             for term in self.term_tree.unification_candidates(query_term.clone())? {
-                println!("  query term: {:?} unifies with {:?}", query_term, term);
+                // println!("  query term: {:?} unifies with {:?}", query_term, term);
                 let occr = self.occurrences.get(&term).expect("missing occurrences for term");
                 // each clause with the same term (up to unification) but opposite truth value is a potential partner
                 for partner_clause in occr.get(!*truth_value) {
                     if *partner_clause == clause { continue; }
-                    println!("  possible partner: {:?}", partner_clause);
+                    // println!("  possible partner: {:?}", partner_clause);
                     let sub = match query_term.unify(&term) {
                         Some(sub) => sub,
                         None => continue,
@@ -114,7 +82,7 @@ impl KeptClauseSet {
             }
         }
         let query_clause = &clause;
-        println!("  resolution partners: {:?}", partners);
+        // println!("  resolution partners: {:?}", partners);
         let resolutions = partners.into_iter()
             .flat_map(|(partner_clause, hits)| {
                 hits.into_iter()
@@ -133,7 +101,7 @@ impl KeptClauseSet {
                         }
                     })
             });
-        println!("  factors: {:?}", factors);
+        // println!("  factors: {:?}", factors);
         let factorizations = factors.into_iter()
             .map(|(sub, ())| {
                 Inference::Factorization {
@@ -147,8 +115,14 @@ impl KeptClauseSet {
     }
     /// Make an as-yet unseen before inference between 2 clauses in the set
     pub fn make_inference(&mut self) -> Option<Rc<Clause>> {
-       self.inferences.pop_front()
-           .and_then(|inference| inference.conclusion().map(Rc::new))
+        // pop inferences until we can make a conclusion
+        while let Some(inf) = self.inferences.pop_front() {
+            if let Some(clause) = inf.conclusion() {
+                return Some(Rc::new(clause)); // made a conclusion
+            }
+            // try another inference
+        }
+        None  // no more inferences to make
     }
 }
 
@@ -171,17 +145,35 @@ impl UnprocessedClauseSet {
         // todo: round robin
         self.clauses.pop()
     }
-    pub fn has_contradiction(self) -> Result<bool,BoxedErrorTrait> {
-       search_contradiction(self)
-    }
 }
-pub fn search_contradiction(clauses: UnprocessedClauseSet) -> Result<bool, BoxedErrorTrait> {
+fn pretty_print_t_table<W>(kept: &KeptClauseSet, unprocessed: &UnprocessedClauseSet, symbols: &SymbolTable, w: &mut W) -> std::io::Result<()>
+where W: std::io::Write
+{
+    const WIDTH: usize = 45;
+    writeln!(w, "{:-<width$}--+--{:-<width$}", "", "", width = WIDTH)?;
+    writeln!(w, "{:width$}  |  {}", "  Kept", "Unprocessed", width = WIDTH)?;
+    writeln!(w, "{:-<width$}--+--{:-<width$}", "", "", width = WIDTH)?;
+    let mut kept_itr = kept.clauses.iter().map(|k| k.demangled(symbols));
+    let mut unproc_itr = unprocessed.clauses.iter().map(|u| u.demangled(symbols));
+    loop {
+        match (kept_itr.next(), unproc_itr.next()) {
+            (None, None) => break,
+            (Some(k),Some(u)) => writeln!(w, "{:width$}  |  {}", k, u, width = WIDTH)?,
+            (Some(k),None) => writeln!(w, "{:width$}  |  {}", k, "", width = WIDTH)?,
+            (None, Some(u)) => writeln!(w, "{:width$}  |  {}", "", u, width = WIDTH)?,
+        }
+    }
+    writeln!(w, "")?;
+    Ok(())
+}
+
+pub fn search_contradiction(clause_set: UnprocessedClauseSet, symbols: &SymbolTable) -> Result<bool, BoxedErrorTrait> {
     let mut kept = KeptClauseSet::new();
-    let mut unprocessed = clauses;
+    let mut unprocessed = clause_set;
     let mut subsumption_tree = SubsumptionTree::new();
     loop {
         while let Some(new) = unprocessed.select_next() {
-            println!("processing: {:?}", new);
+            // println!("processing: {}", new.demangled(symbols));
             if new.is_empty() {
                 return Ok(true); // FOUND EMPTY CLAUSE
             }
@@ -190,6 +182,7 @@ pub fn search_contradiction(clauses: UnprocessedClauseSet) -> Result<bool, Boxed
             let is_retained = subsumption_tree.insert(Rc::clone(&new));
             if is_retained {
                 kept.integrate_clause(new)?;
+                // println!("inferences: {:#?}", kept.inferences);
                 // here we could simplify `new` by clauses in `kept` (forward simplify)
                 // if new.is_empty() {
                 //    return Ok(true); // FOUND EMPTY CLAUSE
@@ -200,9 +193,12 @@ pub fn search_contradiction(clauses: UnprocessedClauseSet) -> Result<bool, Boxed
                 //    kept.insert(new);
                 // }
             }
+            // pretty_print_t_table(&kept, &unprocessed, symbols, &mut std::io::stdout()).unwrap();
         }
         if let Some(conclusion) = kept.make_inference() {
+            // println!("concluding {}", conclusion.demangled(symbols));
             unprocessed.insert(conclusion);
+            // pretty_print_t_table(&kept, &unprocessed, symbols, &mut std::io::stdout()).unwrap();
         } else {
             // todo: return "unkown" if a non-redundant clause was discarded
             return Ok(false); // NO MORE INFERENCES TO MAKE

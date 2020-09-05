@@ -4,10 +4,6 @@ use crate::ast::{SymbolTable, Symbol};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-fn count_pos(clause: &Clause) -> u32 {
-    clause.iter_pos().count() as u32
-}
-
 #[derive(Copy, Clone, Debug)]
 enum Feature {
     CountPos,
