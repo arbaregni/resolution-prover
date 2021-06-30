@@ -167,7 +167,7 @@ This expression is true if *all* sub expressions are true. In this simplest case
 |      | `~p`   | `p`   |
 |------|--------|-------|
 | `~q` | false  | false |
-| `q`  | flase  | TRUE  |
+| `q`  | false  | TRUE  |
 
 ### <a name="if"></a> Implication - If
 You can not chain `implies`:
