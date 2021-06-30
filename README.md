@@ -276,7 +276,7 @@ When asked to **prove** the following, we find:
 
 `IsBlue(the-sky)` :x:
 
-even though the sky is blue. This is because we don't care about seeing of a proposition is true, just if it is provable. And `IsBlue(the-sky)` is not nessicarily true with no prior assumptions. In general, it is much easier to define proofs than truths. See [Gödel's incompleteness theorems](https://en.wikipedia.org/wiki/G%C3%B6del%27s_incompleteness_theorems) and [Tarki's undefinability theorem](https://en.wikipedia.org/wiki/Tarski%27s_undefinability_theorem).
+even though the sky is blue. This is because we don't care about seeing of a proposition is true, just if it is provable. And `IsBlue(the-sky)` is not nessicarily true with no prior assumptions. In general, it is much easier to define proofs than truths. See [Gödel's incompleteness theorems](https://en.wikipedia.org/wiki/G%C3%B6del%27s_incompleteness_theorems) and [Tarski's undefinability theorem](https://en.wikipedia.org/wiki/Tarski%27s_undefinability_theorem).
 
 To be precise, reacting with :x: means that no proof exists, and :white_check_mark: means that a proof exists.
 
